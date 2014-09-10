@@ -5,16 +5,6 @@ Script contains the market institutions for the market simulation
 import numpy as np
 from scipy.optimize import minimize
 
-class Population(object):
-	traders = []
-
-class Market(object):
-	price_history = []
-
-	def take_orders(self):
-		pass
-	def clear_market(self):
-		pass
 
 def expected_utility1(a, x0, p0, x, p, W0, rf, mu, sigma2):
 	"""
@@ -122,6 +112,7 @@ def expected_utility2(a, x, p, W0, rf, mu, sigma2, trader_type):
 	EU = -np.exp(-a * (mu_C - 0.5 * a * sigma2_C))
 	return EU
 
+
 def penalty(x, p, W0, trader_type):
 	if trader_type == "buyer":
 		#cannot buy more than you have cash
@@ -129,11 +120,27 @@ def penalty(x, p, W0, trader_type):
 	if trader_type == "seller":	
 		#cannot sell more than you own
 		return (p*x + W0 < 0) * 1e3 + (x >= 0) * 1e3
-cons = ({'type':'ineq',
-		'fun':lambda x: p * x < W0},
-	)
+
+
+
+
+class Population(object):
+	traders = []
+
+class Market(object):
+	def __init__(self, price_history, rf):
+		self.price_history = price_history
+		self.rf = rf
+	def get_last_price(self):
+		return self.price_history[-1]
+
+	def clear_market(self):
+		pass
+
 class Trader(object):
-	def __init__(self, endowment, risk_aversion, price_distro, trader_type):
+	def __init__(self, market, endowment, risk_aversion, 
+					price_distro, trader_type):
+		self.market = market
 		self.endowment = endowment
 		self.risk_aversion = risk_aversion
 		self.price_distro = price_distro
@@ -154,3 +161,13 @@ class Trader(object):
 		res = minimize(obj_func, x_initial, method = 'nelder-mead',
 				options={'disp': True})
 		return res
+
+	def create_trade(self):
+		rf = self.market.rf
+		p = self.market.get_last_price()
+		res = self.maximize_utility(p, rf)
+		x = res['x'][0]
+		print "Trader type is: ", self.trader_type
+		print "Last price is: ", p
+		print "Optimal trade is: ", x
+		print "Value of trade is: ", x * p	
