@@ -69,7 +69,7 @@ def expected_utility1(a, x0, p0, x, p, W0, rf, mu, sigma2):
 	EU = -np.exp(-a * (mu_C - 0.5 * a * sigma2_C))
 	return EU
 
-def expected_utility2(a, x, p, W0, rf, mu, sigma2):
+def expected_utility2(a, x, p, W0, rf, mu, sigma2, trader_type):
 	"""
 	Returns expected exponential utility function when the asset
 	follows normal distribution. Traders trade only once
@@ -84,7 +84,7 @@ def expected_utility2(a, x, p, W0, rf, mu, sigma2):
 	W0: float
 		Initial cash
 	rf: float
-		1 + risk-free rate of return
+		risk-free rate of return
 	mu: float 
 		Expected return of asset
 	sigma2: float
@@ -107,8 +107,13 @@ def expected_utility2(a, x, p, W0, rf, mu, sigma2):
 	http://en.wikipedia.org/wiki/Exponential_utility
 
 	"""
-	B = (W0 - x * p) * rf
-
+	if trader_type == "buyer":
+		B = (W0 - x * p) * rf
+	elif trader_type == "seller":
+		B = (- x * p) * rf
+	else:
+		print "Wrong Type"
+		raise
 	# Expected value of C**2
 	EC2 = (sigma2 + mu**2) * x**2 + (B - x * p) * (B - x * p + 2 * mu * x)
 	mu_C = mu * x - x * p + B
@@ -116,6 +121,16 @@ def expected_utility2(a, x, p, W0, rf, mu, sigma2):
 	EU = -np.exp(-a * (mu_C - 0.5 * a * sigma2_C))
 	return EU
 
+def penalty(x, p, W0, trader_type):
+	if trader_type == "buyer":
+		#cannot buy more than you have cash
+	 	return (p*x - W0 > 0) * 1e3 + (x < 0) * 1e3
+	if trader_type == "seller":	
+		#cannot sell more than you own
+		return (p*x + W0 < 0) * 1e3 + (x >= 0) * 1e3
+cons = ({'type':'ineq',
+		'fun':lambda x: p * x < W0},
+	)
 class Trader(object):
 	def __init__(self, endowment, risk_aversion, price_distro):
 		self.endowment = endowment
