@@ -18,7 +18,8 @@ class Market(object):
 def expected_utility1(a, x0, p0, x, p, W0, rf, mu, sigma2):
 	"""
 	Returns expected exponential utility function when the asset
-	follows normal distribution
+	follows normal distribution. Traders can trade repatedly and keep
+	a portfolio.
 	Parameters
 	----------
 	a: float
@@ -68,6 +69,52 @@ def expected_utility1(a, x0, p0, x, p, W0, rf, mu, sigma2):
 	EU = -np.exp(-a * (mu_C - 0.5 * a * sigma2_C))
 	return EU
 
+def expected_utility2(a, x, p, W0, rf, mu, sigma2):
+	"""
+	Returns expected exponential utility function when the asset
+	follows normal distribution. Traders trade only once
+	Parameters
+	----------
+	a: float
+		Risk aversion parameter
+	x: float
+		Additional (new) position in asset
+	p: float
+		Current asset price
+	W0: float
+		Initial cash
+	rf: float
+		1 + risk-free rate of return
+	mu: float 
+		Expected return of asset
+	sigma2: float
+		Variance of asset return
+
+	Notes
+	-----
+	Expected utility is
+	E(U) = -np.exp(-a * (mu_C - 0.5 * a * sigma2_C)
+	where mu_c is the mean of the final wealth (C) and sigma2_c is the variance
+	of the final wealth.
+	Final wealth (C) is given by:
+	C =  x * (v - p) + (W0 - x * p) * rf
+	where v is the realized price of the asset. 
+	v is normally distributed with mean mu and var sigma2
+
+	References
+	----------
+	http://www.tau.ac.il/~spiegel/teaching/corpfin/mean-variance.pdf
+	http://en.wikipedia.org/wiki/Exponential_utility
+
+	"""
+	B = (W0 - x * p) * rf
+
+	# Expected value of C**2
+	EC2 = (sigma2 + mu**2) * x**2 + (B - x * p) * (B - x * p + 2 * mu * x)
+	mu_C = mu * x - x * p + B
+	sigma2_C = EC2 - mu_C**2
+	EU = -np.exp(-a * (mu_C - 0.5 * a * sigma2_C))
+	return EU
 
 class Trader(object):
 	def __init__(self, endowment, risk_aversion, price_distro):
