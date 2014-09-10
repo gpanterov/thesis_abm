@@ -167,8 +167,12 @@ class Market(object):
 		self.rf = rf
 		self.buy_trades = []
 		self.sell_trades = []
+		self.inventories = []
+	def end_trading_round(self):
+		self.sell_trades = []
+		self.buy_trades = []
 
-	def estimate_supply_demand(self, pop, N, max_price=100.):
+	def estimate_supply_demand(self, pop, N):
 		for i in range(N):
 			print "Simulation number ", i
 			p = np.random.normal(30., 5.)
@@ -177,16 +181,15 @@ class Market(object):
 			pop.trade()
 			self.Qs.append(-np.sum(self.sell_trades))
 			self.Qd.append(np.sum(self.buy_trades))
+			self.end_trading_round()
 			
 			
 		Qs = np.array(self.Qs[-N : ])
 		Qd = np.array(self.Qd[-N : ])
 		P = np.array(self.price_history[-N :])
-		print Qd
-		print Qs
-		X = sm.add_constant(np.log(P))
-		model_s = sm.OLS(np.log(Qs), X).fit()
-		model_d = sm.OLS(np.log(Qd), X).fit()
+		X = sm.add_constant(P)
+		model_s = sm.OLS(Qs, X).fit()
+		model_d = sm.OLS(Qd, X).fit()
 
 		self.Qs_params = model_s.params
 		self.Qd_params = model_d.params
@@ -214,6 +217,8 @@ class Market(object):
 		model_s.params = array([ 13.69711137,  -0.19148352])
 		model_d.params=array([ 13.72370539,   0.08500943])
 
+		
+
 		"""
 		Qs = - np.sum(self.sell_trades)
 		Qd = np.sum(self.buy_trades)
@@ -227,8 +232,8 @@ class Market(object):
 		print "Qs: ", Qs
 		print "Qd: ", Qd
 		print "New price: ", new_price
-		self.sell_trades = []
-		self.buy_trades = []
+		self.end_trading_round()
+
 
 class Trader(object):
 	def __init__(self, market, endowment, risk_aversion, 
@@ -284,8 +289,50 @@ class SimpleMarket(Market):
 		self.price_history = price_history
 		self.Qs = []
 		self.Qd = []
+		self.expectedQs = []
+		self.expectedQd = []
 		self.buy_trades = []
 		self.sell_trades = []
+		self.inventories = []
+	def update_price(self, Qs_params, Qd_params):
+		"""
+		The market maker updates the price based on the supply and demand
+		estimates. THe market maker upda
+		
+		(Log)
+		Qd_params = [34.7665, -7.986281]
+		Qs_params = [-21.01799, 8.49184]
+
+		(Levels)
+		Qs_params = [-16004.9490137 ,    701.58337161]
+		Qd_params = [ 26004.9490137 ,   -701.58337161]
+		"""
+		Qs = - np.sum(self.sell_trades)
+		Qd = np.sum(self.buy_trades)
+
+		self.Qs.append(Qs)
+		self.Qd.append(Qd)
+
+		p = self.get_last_price()
+	
+		self.inventories.append( Qs - Qd)
+		I = np.sum(self.inventories)	
+		new_price = (I - (Qd_params[0] - Qs_params[0])) / \
+					(Qd_params[1] - Qs_params[1])
+
+
+		self.price_history.append(new_price)
+		print "-" * 50
+		print "Old price is: ", p
+		print "Qs: ", Qs
+		print "Qd: ", Qd
+		print "Inventory of the market maker: ", I
+		print "New price: ", new_price
+
+		self.expectedQs.append(Qs_params[0] + Qs_params[1] * new_price)
+		self.expectedQd.append(Qd_params[0] + Qd_params[1] * new_price)
+		self.end_trading_round()
+
 
 class SimplePopulation(Population):
 
@@ -300,10 +347,12 @@ class SimplePopulation(Population):
 		self.traders = []
 		for i in range(self.pop_size):
 			nt = np.random.binomial(1, self.noise_prob)
-			if nt == 1:
+			if nt != 1:
 				mu = self.mu
 			else:
-				mu = np.random.normal(self.mu, stdev_noise)
+				p = self.market.get_last_price()
+				mu = np.random.normal(p, self.stdev_noise)
+
 
 			assert mu > 0
 			
