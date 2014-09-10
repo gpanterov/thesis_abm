@@ -1,5 +1,6 @@
 """
 9/9/2014
+Georgi Panterov
 Script contains the market institutions for the market simulation
 """
 import numpy as np
