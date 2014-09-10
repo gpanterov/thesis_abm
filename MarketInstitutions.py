@@ -122,36 +122,72 @@ def penalty(x, p, W0, trader_type):
 		return (p*x + W0 < 0) * 1e3 + (x >= 0) * 1e3
 
 
-
+sample_distro_params = {'pop_size':100,
+			'endowment': lambda : np.random.normal(10000, 1000),
+			'risk_aversion':lambda : np.random.normal(1e-3, 5e-4),
+			'price_distro': lambda : {'mu':30., 'sigma2':9.}}
 
 class Population(object):
 	traders = []
-
+	def __init__(self, market, distro_params)
+		self.market = market
+		self.distro_params = distro_params
+	
+	def create_population(self):
+		for i in range(len(self.distro_params['pop_size'])):
+			W0 = self.distro_params['endowment']()
+			a = self.distro_params['risk_aversion']()
+			price_distro = self.distro_params['price_distro']()
+			if trader_indicator == 1:
+				trader_type == "buyer"
+			else:
+				trader_type == "seller"
+			
+			t = Trader(self.market, W0, a, price_distro, trader_type)	
+			self.traders.append(t)
 class Market(object):
 	def __init__(self, price_history, rf):
 		self.price_history = price_history
 		self.rf = rf
+		self.buy_trades = []
+		self.sell_trades = []
+
 	def get_last_price(self):
 		return self.price_history[-1]
 
+	def submit_trade(self, x):
+		print "Submitting trade of size", x
+		if x > 0:
+			self.buy_trades.append(x)
+		if x < 0:
+			self.sell_trades.append(x)
+
 	def clear_market(self):
-		pass
+		"""
+		Qd = a - b * P
+		Qs = u + z * P
+		"""
+		Qs = - np.sum(self.sell_trades)
+		Qd = np.sum(self.buy_trades)
+		
 
 class Trader(object):
 	def __init__(self, market, endowment, risk_aversion, 
-					price_distro, trader_type):
+					price_distro):
 		self.market = market
 		self.endowment = endowment
 		self.risk_aversion = risk_aversion
 		self.price_distro = price_distro
-		self.trader_type = trader_type
 
 	def maximize_utility(self, p, rf ):
 		a = self.risk_aversion
 		W0 = self.endowment
 		mu = self.price_distro['mu']
 		sigma2 = self.price_distro['sigma2']
-		trader_type = self.trader_type
+		if mu >= p:
+			trader_type = "buyer"
+		else:
+			trader_type = "seller"
 		obj_func = lambda  x:  - expected_utility2(a, x, p, W0, rf, mu, sigma2, 
 						trader_type) + penalty(x, p, W0, trader_type)
 		if trader_type == "buyer":
@@ -167,7 +203,6 @@ class Trader(object):
 		p = self.market.get_last_price()
 		res = self.maximize_utility(p, rf)
 		x = res['x'][0]
-		print "Trader type is: ", self.trader_type
-		print "Last price is: ", p
-		print "Optimal trade is: ", x
-		print "Value of trade is: ", x * p	
+		if x > 0.5 or x < -0.5:
+			self.market.submit_trade(x)
+
