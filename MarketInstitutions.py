@@ -318,7 +318,7 @@ class SimpleMarket(Market):
 
 		self.base = np.column_stack ((np.array(self.prices), (Qs - Qd)**2))
 		indx = np.argsort(self.base[:, 1])
-		equilbrium_price = self.prices[:, 0][indx[0]]	
+		equilibrium_price = self.base[:, 0][indx[0]]	
 		# Delete generated values
 		self.Qs = []
 		self.Qd = []
