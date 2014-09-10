@@ -60,10 +60,10 @@ def expected_utility1(a, x0, p0, x, p, W0, rf, mu, sigma2):
 	B = (W0 - x * p) * rf
 
 	# Expected value of C**2
-	EC2 = (sigma2 + mu) * (np.sum(x0) + x) ** 2 + \
+	EC2 = (sigma2 + mu**2) * (np.sum(x0) + x) ** 2 + \
 			2 * mu * (x + np.sum(x0)) * (B - A - p * x) + \
 			(A - B + p * x) ** 2
-	mu_C = mu * np.sum(x0) - np.sum(x0 * p) + x * mu - x * p + B
+	mu_C = mu * np.sum(x0) - A + x * mu - x * p + B
 	sigma2_C = EC2 - mu_C**2
 	EU = -np.exp(-a * (mu_C - 0.5 * a * sigma2_C))
 	return EU
@@ -78,6 +78,5 @@ class Trader(object):
 		self.current_cash = endowment
 
 	def expected_utility(self):
-		x0 = np.sum(self.current_positions)
-		
+		pass
 		
