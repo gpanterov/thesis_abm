@@ -121,11 +121,21 @@ def penalty(x, p, W0, trader_type):
 		#cannot sell more than you own
 		return (p*x + W0 < 0) * 1e3 + (x >= 0) * 1e3
 
+def gen_price_distro(noise_trader, mu, sigma2, stdev_mu, stdev_sig):
+	if noise_trader:
+		mu = np.random.normal(mu, stdev_mu)
+		sigma2 = np.random.normal(sigma2, stdev_sig)
+		
+	assert mu > 0
+	assert sigma2 > 0
+	return {'mu':mu, 'sigma2':sigma2}
+		
 
 sample_distro_params = {'pop_size':100,
 			'endowment': lambda : np.random.normal(10000, 1000),
 			'risk_aversion':lambda : np.random.normal(1e-3, 5e-4),
-			'price_distro': lambda : {'mu':30., 'sigma2':9.}}
+			'noise_trader' : lambda : np.random.binomial(1, 0.5),
+			'price_distro': lambda nt: gen_price_distro(nt, 30., 9., 4, 1)}
 
 class Population(object):
 	traders = []
@@ -137,12 +147,16 @@ class Population(object):
 		for i in range(self.distro_params['pop_size']):
 			W0 = self.distro_params['endowment']()
 			a = self.distro_params['risk_aversion']()
-			price_distro = self.distro_params['price_distro']()
+			nt = self.distro_params['noise_trader']()
+			price_distro = self.distro_params['price_distro'](nt)
+
 			t = Trader(self.market, W0, a, price_distro)	
 			self.traders.append(t)
 
 	def trade(self):
-		pass
+		for t in self.traders:
+			t.create_trade()
+		
 
 
 class Market(object):
@@ -155,7 +169,8 @@ class Market(object):
 		self.sell_trades = []
 
 	def create_starting_values(self, N):
-		pass
+		for i in range(N):
+			pass
 			
 			
 
@@ -202,7 +217,7 @@ class Trader(object):
 		if trader_type == "seller":
 			x_initial = -1.
 		res = minimize(obj_func, x_initial, method = 'nelder-mead',
-				options={'disp': True})
+				options={'disp': False})
 		return res
 
 	def create_trade(self):
