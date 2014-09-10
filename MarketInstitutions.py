@@ -168,13 +168,15 @@ class Market(object):
 		self.buy_trades = []
 		self.sell_trades = []
 		self.inventories = []
+
 	def end_trading_round(self):
 		self.sell_trades = []
 		self.buy_trades = []
 
 	def estimate_supply_demand(self, pop, N):
 		for i in range(N):
-			print "Simulation number ", i
+			if i % 10 == 0:
+				print "Simulation number ", i
 			p = np.random.normal(30., 5.)
 			self.price_history.append(p)
 			pop.create_population()
@@ -294,6 +296,34 @@ class SimpleMarket(Market):
 		self.buy_trades = []
 		self.sell_trades = []
 		self.inventories = []
+
+
+	def calculate_equilibrium_price(self, pop, N=100):
+		self.prices = []
+		for i in np.arange(1, N, 0.5):
+			if i % 10 == 0:
+				print "Simulation number ", i
+			p = float(i)
+			self.price_history.append(p)
+			self.prices.append(p)
+			pop.create_population()
+			pop.trade()
+			self.Qs.append(-np.sum(self.sell_trades))
+			self.Qd.append(np.sum(self.buy_trades))
+			self.end_trading_round()
+			
+			
+		Qs = np.array(self.Qs)
+ 		Qd = np.array(self.Qd)
+
+		self.base = np.column_stack ((np.array(self.prices), (Qs - Qd)**2))
+		indx = np.argsort(self.base[:, 1])
+		equilbrium_price = self.prices[:, 0][indx[0]]	
+		# Delete generated values
+		self.Qs = []
+		self.Qd = []
+		self.price_history = [equilibrium_price]
+
 	def update_price(self, Qs_params, Qd_params):
 		"""
 		The market maker updates the price based on the supply and demand
@@ -315,11 +345,19 @@ class SimpleMarket(Market):
 
 		p = self.get_last_price()
 	
-		self.inventories.append( Qs - Qd)
-		I = np.sum(self.inventories)	
-		new_price = (I - (Qd_params[0] - Qs_params[0])) / \
-					(Qd_params[1] - Qs_params[1])
+#		self.inventories.append( Qs - Qd)
+#		I = np.sum(self.inventories)	
+#		new_price = (I - (Qd_params[0] - Qs_params[0])) / \
+#					(Qd_params[1] - Qs_params[1])
+		g = 0.02
 
+
+		if Qs > Qd:
+			# more supply - price should go down
+			new_price = (1 - g) * p
+		else:
+			# more demand - prices go up
+			new_price = (1 + g) * p
 
 		self.price_history.append(new_price)
 		print "-" * 50
@@ -333,28 +371,29 @@ class SimpleMarket(Market):
 		self.expectedQd.append(Qd_params[0] + Qd_params[1] * new_price)
 		self.end_trading_round()
 
+			
 
 class SimplePopulation(Population):
 
-	def __init__(self, market, pop_size, mu, stdev_noise, noise_prob):
+	def __init__(self, market, pop_size, mu, stdev_mu, stdev_noise, noise_prob):
 		self.market = market
 		self.pop_size = pop_size
 		self.mu = mu
 		self.stdev_noise = stdev_noise
 		self.noise_prob = noise_prob
-
+		self.stdev_mu = stdev_mu
 	def create_population(self):
 		self.traders = []
 		for i in range(self.pop_size):
 			nt = np.random.binomial(1, self.noise_prob)
 			if nt != 1:
-				mu = self.mu
+				mu = np.random.normal(self.mu, self.stdev_mu)
 			else:
 				p = self.market.get_last_price()
 				mu = np.random.normal(p, self.stdev_noise)
+				mu = np.max([5., mu])
 
 
-			assert mu > 0
 			
 			t = SimpleTrader(self.market, mu)	
 			self.traders.append(t)
