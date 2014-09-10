@@ -129,7 +129,7 @@ sample_distro_params = {'pop_size':100,
 
 class Population(object):
 	traders = []
-	def __init__(self, market, distro_params)
+	def __init__(self, market, distro_params):
 		self.market = market
 		self.distro_params = distro_params
 	
