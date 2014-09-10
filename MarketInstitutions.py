@@ -3,6 +3,7 @@
 Script contains the market institutions for the market simulation
 """
 import numpy as np
+from scipy.optimize import minimize
 
 class Population(object):
 	traders = []
@@ -110,7 +111,7 @@ def expected_utility2(a, x, p, W0, rf, mu, sigma2, trader_type):
 	if trader_type == "buyer":
 		B = (W0 - x * p) * rf
 	elif trader_type == "seller":
-		B = (- x * p) * rf
+		B = (W0 + x * p) * rf
 	else:
 		print "Wrong Type"
 		raise
@@ -132,13 +133,24 @@ cons = ({'type':'ineq',
 		'fun':lambda x: p * x < W0},
 	)
 class Trader(object):
-	def __init__(self, endowment, risk_aversion, price_distro):
+	def __init__(self, endowment, risk_aversion, price_distro, trader_type):
 		self.endowment = endowment
 		self.risk_aversion = risk_aversion
 		self.price_distro = price_distro
-		self.current_positions = []
-		self.current_cash = endowment
+		self.trader_type = trader_type
 
-	def expected_utility(self):
-		pass
-		
+	def maximize_utility(self, p, rf ):
+		a = self.risk_aversion
+		W0 = self.endowment
+		mu = self.price_distro['mu']
+		sigma2 = self.price_distro['sigma2']
+		trader_type = self.trader_type
+		obj_func = lambda  x:  - expected_utility2(a, x, p, W0, rf, mu, sigma2, 
+						trader_type) + penalty(x, p, W0, trader_type)
+		if trader_type == "buyer":
+			x_initial = 1.
+		if trader_type == "seller":
+			x_initial = -1.
+		res = minimize(obj_func, x_initial, method = 'nelder-mead',
+				options={'disp': True})
+		return res
