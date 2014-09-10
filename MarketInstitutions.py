@@ -4,7 +4,7 @@ Script contains the market institutions for the market simulation
 """
 import numpy as np
 from scipy.optimize import minimize
-
+import statsmodels.api as sm
 
 def expected_utility1(a, x0, p0, x, p, W0, rf, mu, sigma2):
 	"""
@@ -131,19 +131,19 @@ def gen_price_distro(noise_trader, mu, sigma2, stdev_mu, stdev_sig):
 	return {'mu':mu, 'sigma2':sigma2}
 		
 
-sample_distro_params = {'pop_size':100,
+sample_distro_params = {'pop_size':1000,
 			'endowment': lambda : np.random.normal(10000, 1000),
 			'risk_aversion':lambda : np.random.normal(1e-3, 5e-4),
-			'noise_trader' : lambda : np.random.binomial(1, 0.5),
+			'noise_trader' : lambda : np.random.binomial(1, 0.3),
 			'price_distro': lambda nt: gen_price_distro(nt, 30., 9., 4, 1)}
 
 class Population(object):
-	traders = []
 	def __init__(self, market, distro_params):
 		self.market = market
 		self.distro_params = distro_params
 	
 	def create_population(self):
+		self.traders = []
 		for i in range(self.distro_params['pop_size']):
 			W0 = self.distro_params['endowment']()
 			a = self.distro_params['risk_aversion']()
@@ -168,30 +168,67 @@ class Market(object):
 		self.buy_trades = []
 		self.sell_trades = []
 
-	def create_starting_values(self, N):
+	def estimate_supply_demand(self, pop, N, max_price=100.):
 		for i in range(N):
-			pass
+			print "Simulation number ", i
+			p = np.random.normal(30., 5.)
+			self.price_history.append(p)
+			pop.create_population()
+			pop.trade()
+			self.Qs.append(-np.sum(self.sell_trades))
+			self.Qd.append(np.sum(self.buy_trades))
 			
 			
+		Qs = np.array(self.Qs[-N : ])
+		Qd = np.array(self.Qd[-N : ])
+		P = np.array(self.price_history[-N :])
+		print Qd
+		print Qs
+		X = sm.add_constant(np.log(P))
+		model_s = sm.OLS(np.log(Qs), X).fit()
+		model_d = sm.OLS(np.log(Qd), X).fit()
 
+		self.Qs_params = model_s.params
+		self.Qd_params = model_d.params
+		
+		# Delete generated values
+		self.Qs[-N : ] = []
+		self.Qd[-N : ] = []
+		self.price_history[-N : ] = []
+		return model_s, model_d
 	def get_last_price(self):
 		return self.price_history[-1]
 
 	def submit_trade(self, x):
-		print "Submitting trade of size", x
+		#print "Submitting trade of size", x
 		if x > 0:
 			self.buy_trades.append(x)
 		if x < 0:
 			self.sell_trades.append(x)
 
-	def clear_market(self):
+	def update_price(self):
 		"""
-		Qd = a - b * P
-		Qs = u + z * P
+		The market maker updates the price based on the supply and demand
+		estimates. THe market maker upda
+
+		model_s.params = array([ 13.69711137,  -0.19148352])
+		model_d.params=array([ 13.72370539,   0.08500943])
+
 		"""
 		Qs = - np.sum(self.sell_trades)
 		Qd = np.sum(self.buy_trades)
+		p = self.get_last_price()
 		
+		excess_supply = (Qs - Qd) / (Qs + 1)
+		new_price = (1 - excess_supply) * p 
+		self.price_history.append(new_price)
+		print "-" * 50
+		print "Old price is: ", p
+		print "Qs: ", Qs
+		print "Qd: ", Qd
+		print "New price: ", new_price
+		self.sell_trades = []
+		self.buy_trades = []
 
 class Trader(object):
 	def __init__(self, market, endowment, risk_aversion, 
@@ -225,6 +262,52 @@ class Trader(object):
 		p = self.market.get_last_price()
 		res = self.maximize_utility(p, rf)
 		x = res['x'][0]
-		if x > 0.5 or x < -0.5:
+		if x > 2.5 or x < -2.5:
 			self.market.submit_trade(x)
+
+class SimpleTrader(Trader):
+	def __init__(self, market, mu):
+		self.market = market
+		self.mu = mu
+
+	def create_trade(self):
+		p = self.market.get_last_price()
+		if self.mu > p:
+			# Buy!
+			x = 1.
+		else:
+			x = -1.
+		self.market.submit_trade(x)
+
+class SimpleMarket(Market):
+	def __init__(self, price_history):
+		self.price_history = price_history
+		self.Qs = []
+		self.Qd = []
+		self.buy_trades = []
+		self.sell_trades = []
+
+class SimplePopulation(Population):
+
+	def __init__(self, market, pop_size, mu, stdev_noise, noise_prob):
+		self.market = market
+		self.pop_size = pop_size
+		self.mu = mu
+		self.stdev_noise = stdev_noise
+		self.noise_prob = noise_prob
+
+	def create_population(self):
+		self.traders = []
+		for i in range(self.pop_size):
+			nt = np.random.binomial(1, self.noise_prob)
+			if nt == 1:
+				mu = self.mu
+			else:
+				mu = np.random.normal(self.mu, stdev_noise)
+
+			assert mu > 0
+			
+			t = SimpleTrader(self.market, mu)	
+			self.traders.append(t)
+
 
