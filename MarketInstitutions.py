@@ -134,23 +134,30 @@ class Population(object):
 		self.distro_params = distro_params
 	
 	def create_population(self):
-		for i in range(len(self.distro_params['pop_size'])):
+		for i in range(self.distro_params['pop_size']):
 			W0 = self.distro_params['endowment']()
 			a = self.distro_params['risk_aversion']()
 			price_distro = self.distro_params['price_distro']()
-			if trader_indicator == 1:
-				trader_type == "buyer"
-			else:
-				trader_type == "seller"
-			
-			t = Trader(self.market, W0, a, price_distro, trader_type)	
+			t = Trader(self.market, W0, a, price_distro)	
 			self.traders.append(t)
+
+	def trade(self):
+		pass
+
+
 class Market(object):
 	def __init__(self, price_history, rf):
 		self.price_history = price_history
+		self.Qs = []
+		self.Qd = []
 		self.rf = rf
 		self.buy_trades = []
 		self.sell_trades = []
+
+	def create_starting_values(self, N):
+		pass
+			
+			
 
 	def get_last_price(self):
 		return self.price_history[-1]
