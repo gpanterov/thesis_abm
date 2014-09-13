@@ -131,31 +131,8 @@ def gen_price_distro(noise_trader, mu, sigma2, stdev_mu, stdev_sig):
 	return {'mu':mu, 'sigma2':sigma2}
 		
 
-sample_distro_params = {'pop_size':1000,
-			'endowment': lambda : np.random.normal(10000, 1000),
-			'risk_aversion':lambda : np.random.normal(1e-3, 5e-4),
-			'noise_trader' : lambda : np.random.binomial(1, 0.3),
-			'price_distro': lambda nt: gen_price_distro(nt, 30., 9., 4, 1)}
 
-class Population(object):
-	def __init__(self, market, distro_params):
-		self.market = market
-		self.distro_params = distro_params
-	
-	def create_population(self):
-		self.traders = []
-		for i in range(self.distro_params['pop_size']):
-			W0 = self.distro_params['endowment']()
-			a = self.distro_params['risk_aversion']()
-			nt = self.distro_params['noise_trader']()
-			price_distro = self.distro_params['price_distro'](nt)
 
-			t = Trader(self.market, W0, a, price_distro)	
-			self.traders.append(t)
-
-	def trade(self):
-		for t in self.traders:
-			t.create_trade()
 		
 
 
@@ -370,7 +347,7 @@ class SimpleMarket(Market):
 
 			
 
-class SimplePopulation(Population):
+class SimplePopulation(object):
 
 	def __init__(self, market, pop_size, mu, stdev_mu, stdev_noise, noise_prob):
 		self.market = market
@@ -395,4 +372,6 @@ class SimplePopulation(Population):
 			t = SimpleTrader(self.market, mu)	
 			self.traders.append(t)
 
-
+	def trade(self):
+		for t in self.traders:
+			t.create_trade()
