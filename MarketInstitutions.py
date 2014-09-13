@@ -214,42 +214,8 @@ class Market(object):
 		self.end_trading_round()
 
 
-class Trader(object):
-	def __init__(self, market, endowment, risk_aversion, 
-					price_distro):
-		self.market = market
-		self.endowment = endowment
-		self.risk_aversion = risk_aversion
-		self.price_distro = price_distro
 
-	def maximize_utility(self, p, rf ):
-		a = self.risk_aversion
-		W0 = self.endowment
-		mu = self.price_distro['mu']
-		sigma2 = self.price_distro['sigma2']
-		if mu >= p:
-			trader_type = "buyer"
-		else:
-			trader_type = "seller"
-		obj_func = lambda  x:  - expected_utility2(a, x, p, W0, rf, mu, sigma2, 
-						trader_type) + penalty(x, p, W0, trader_type)
-		if trader_type == "buyer":
-			x_initial = 1.
-		if trader_type == "seller":
-			x_initial = -1.
-		res = minimize(obj_func, x_initial, method = 'nelder-mead',
-				options={'disp': False})
-		return res
-
-	def create_trade(self):
-		rf = self.market.rf
-		p = self.market.get_last_price()
-		res = self.maximize_utility(p, rf)
-		x = res['x'][0]
-		if x > 2.5 or x < -2.5:
-			self.market.submit_trade(x)
-
-class SimpleTrader(Trader):
+class SimpleTrader(object):
 	def __init__(self, market, mu):
 		self.market = market
 		self.mu = mu
