@@ -132,89 +132,6 @@ def gen_price_distro(noise_trader, mu, sigma2, stdev_mu, stdev_sig):
 		
 
 
-
-		
-
-
-class Market(object):
-	def __init__(self, price_history, rf):
-		self.price_history = price_history
-		self.Qs = []
-		self.Qd = []
-		self.rf = rf
-		self.buy_trades = []
-		self.sell_trades = []
-		self.inventories = []
-
-	def end_trading_round(self):
-		self.sell_trades = []
-		self.buy_trades = []
-
-	def estimate_supply_demand(self, pop, N):
-		for i in range(N):
-			if i % 10 == 0:
-				print "Simulation number ", i
-			p = np.random.normal(30., 5.)
-			self.price_history.append(p)
-			pop.create_population()
-			pop.trade()
-			self.Qs.append(-np.sum(self.sell_trades))
-			self.Qd.append(np.sum(self.buy_trades))
-			self.end_trading_round()
-			
-			
-		Qs = np.array(self.Qs[-N : ])
-		Qd = np.array(self.Qd[-N : ])
-		P = np.array(self.price_history[-N :])
-		X = sm.add_constant(P)
-		model_s = sm.OLS(Qs, X).fit()
-		model_d = sm.OLS(Qd, X).fit()
-
-		self.Qs_params = model_s.params
-		self.Qd_params = model_d.params
-		
-		# Delete generated values
-		self.Qs[-N : ] = []
-		self.Qd[-N : ] = []
-		self.price_history[-N : ] = []
-		return model_s, model_d
-	def get_last_price(self):
-		return self.price_history[-1]
-
-	def submit_trade(self, x):
-		#print "Submitting trade of size", x
-		if x > 0:
-			self.buy_trades.append(x)
-		if x < 0:
-			self.sell_trades.append(x)
-
-	def update_price(self):
-		"""
-		The market maker updates the price based on the supply and demand
-		estimates. THe market maker upda
-
-		model_s.params = array([ 13.69711137,  -0.19148352])
-		model_d.params=array([ 13.72370539,   0.08500943])
-
-		
-
-		"""
-		Qs = - np.sum(self.sell_trades)
-		Qd = np.sum(self.buy_trades)
-		p = self.get_last_price()
-		
-		excess_supply = (Qs - Qd) / (Qs + 1)
-		new_price = (1 - excess_supply) * p 
-		self.price_history.append(new_price)
-		print "-" * 50
-		print "Old price is: ", p
-		print "Qs: ", Qs
-		print "Qd: ", Qd
-		print "New price: ", new_price
-		self.end_trading_round()
-
-
-
 class SimpleTrader(object):
 	def __init__(self, market, mu):
 		self.market = market
@@ -229,7 +146,7 @@ class SimpleTrader(object):
 			x = -1.
 		self.market.submit_trade(x)
 
-class SimpleMarket(Market):
+class SimpleMarket(object):
 	def __init__(self, price_history):
 		self.price_history = price_history
 		self.Qs = []
@@ -240,6 +157,19 @@ class SimpleMarket(Market):
 		self.sell_trades = []
 		self.inventories = []
 
+	def get_last_price(self):
+		return self.price_history[-1]
+
+	def submit_trade(self, x):
+		#print "Submitting trade of size", x
+		if x > 0:
+			self.buy_trades.append(x)
+		if x < 0:
+			self.sell_trades.append(x)
+
+	def end_trading_round(self):
+		self.sell_trades = []
+		self.buy_trades = []
 
 	def calculate_equilibrium_price(self, pop, N=100):
 		self.prices = []
