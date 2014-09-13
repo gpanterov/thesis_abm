@@ -300,7 +300,7 @@ class SimpleMarket(Market):
 
 	def calculate_equilibrium_price(self, pop, N=100):
 		self.prices = []
-		for i in np.arange(1, N, 0.5):
+		for i in np.arange(1, N, 1):
 			if i % 10 == 0:
 				print "Simulation number ", i
 			p = float(i)
@@ -324,7 +324,7 @@ class SimpleMarket(Market):
 		self.Qd = []
 		self.price_history = [equilibrium_price]
 
-	def update_price(self, Qs_params, Qd_params):
+	def update_price(self):
 		"""
 		The market maker updates the price based on the supply and demand
 		estimates. THe market maker upda
@@ -364,11 +364,8 @@ class SimpleMarket(Market):
 		print "Old price is: ", p
 		print "Qs: ", Qs
 		print "Qd: ", Qd
-		print "Inventory of the market maker: ", I
+		#print "Inventory of the market maker: ", I
 		print "New price: ", new_price
-
-		self.expectedQs.append(Qs_params[0] + Qs_params[1] * new_price)
-		self.expectedQd.append(Qd_params[0] + Qd_params[1] * new_price)
 		self.end_trading_round()
 
 			
