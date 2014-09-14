@@ -167,61 +167,75 @@ class Trend_Trader(SimpleTrader):
 			pass
 		
 					
+class Contrarian(SimpleTrader):
+	def __init__(self, market, pop_size, n) :
+		self.market = market
+		self.pop_size = pop_size
+		self.n = n
+		self.own_trades = []
+		self.trades_prices = []
 
+	def update_expectations(self):
+		if len(self.market.price_history) < self.n:
+			self.prob = self.market.get_last_price() + np.random.normal(0, 0.01)
+			return None
 
+		prices = np.array(self.market.price_history)
+		ema = pd.ewma(prices, self.n)
+		self.prob = ema[-1]
 
 class SimpleMarket(object):
 	def __init__(self, price_history, max_price=0.95, min_price=0.05):
 		self.price_history = price_history[:]
 		self.inventory = 0
-		self.inventory_history = []
+		self.inventory_history = [0]
 		self.max_price = max_price
 		self.min_price = min_price
-		self.update_inventory = []
-		self.all_inventory_changes = []
-		self.all_new_prices = []
+		self.update_timer = 0
+		self.trades_per_period = []
+		self.new_prices = []
+		self.excess_per_period = []
+
 	def get_last_price(self):
 		return self.price_history[-1]
 
 	def submit_trade(self, x):
 		self.inventory += - x
 		self.inventory_history.append(self.inventory)
-		self.update_inventory.append(self.inventory)
-		if len(self.update_inventory)==10:  # Update price if inventory grows too much
+		self.update_timer +=1
+		self.trades_per_period.append(x)
+
+	#	if self.update_timer >= 15: 
+			 # Update price if inventory grows too much
+		if self.update_timer >= 15:
 			self.update_price()
-			self.update_inventory = []
+			self.update_timer = 0
+			self.trades_per_period = []
 		else:
 			self.price_history.append(self.get_last_price())
 
 
-	def update_price(self):
+	def update_price(self):	
 		p = self.get_last_price()
-		inventory_change = self.update_inventory[-1] - self.update_inventory[0]
-		G = {0 : 0.,
-			1 : 0.,
-			2 : 0.,
-			3: 0.005,
-			4: 0.01,
-			5: 0.01,
-			6: 0.01,
-			7: 0.02,
-			8: 0.025,
-			9: 0.025}
-		k = int(np.abs(inventory_change))
-		g = G[k]
-		self.all_inventory_changes.append(k)
-		if np.mean(self.update_inventory) >= 0:
+
+		inventory_growth = np.abs(self.inventory_history[-1]) > np.abs(self.inventory_history[-2])
+		self.excess_per_period.append(np.mean(self.trades_per_period))
+
+		g= 0.01
+		if self.inventory > 0 and inventory_growth:
+
 			# Positive inventory means a lot of sellers - price should go down
 			new_price = (1 - g) * p
-		elif np.mean(self.update_inventory) < 0:
+		elif self.inventory < 0 and inventory_growth:
 			# Negative inventory means a lot of buyers- prices go up
 			new_price = (1 + g) * p
+		else:
+			new_price = p
 
 		new_price = np.max((self.min_price, new_price))
 		new_price = np.min((self.max_price, new_price))
 		self.price_history.append(new_price)
-
-		self.all_new_prices.append(new_price)
+		self.new_prices.append(new_price)
 
 class Simulation(object):
 	def __init__(self, market, all_traders, util_func = exp_util):
@@ -237,12 +251,10 @@ class Simulation(object):
 
 	def run(self, num_trades):
 		self.traders_sizes = [t.pop_size for t in self.all_traders]
-		self.all_trade_probs = np.empty((num_trades, len(self.traders_sizes)))
 		for t in range(num_trades):
 			trade_incentives = [i.get_trade_incentive(self.util_func) for i in self.all_traders]
 			trade_probs = np.array(self.traders_sizes) * np.array(trade_incentives)
 			self.trade_probs = trade_probs
-			self.all_trade_probs[t, :] = trade_probs
 			cdf_vals = cdf(trade_probs)
 			trader = choice(self.all_traders, cdf_vals)
 			trader.create_trade()
