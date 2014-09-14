@@ -21,29 +21,26 @@ class SimpleTrader(object):
 		self.prob = prob
 		self.own_trades = []
 
-	def create_trade(self):
-		P = self.market.get_last_price()
+	def get_trade_incentive(self):
 
-		util_buy = log_util("buy", P, self.prob)
-		util_sell = log_util("sell", P, self.prob)
-		util_none = log_util(None, P, self.prob)
-		if util_buy > util_none:
+		P = self.market.get_last_price()
+		self.util_buy = log_util("buy", P, self.prob)
+		self.util_sell = log_util("sell", P, self.prob)
+		self.util_none = log_util(None, P, self.prob)
+
+		self.trade_incentive = np.max((self.util_buy, self.util_sell, self.util_none))
+	def create_trade(self):
+		self.get_trade_incentive()
+
+		if self.util_buy > self.util_none:
 			# Buy
 			x = 1.
-		elif util_sell > util_none:
+		elif self.util_sell > self.util_none:
 			x = -1.
 		else:
 			return None
 		self.own_trades.append(x)
 		self.market.submit_trade(x)
-
-#		if self.mu > p:
-#			# Buy!
-#			x = 1.
-#		else:
-#			x = -1.
-#		self.own_trades.append(x)
-#		self.market.submit_trade(x)
 
 	def update_expectations(self):
 		pass
@@ -53,10 +50,12 @@ class SimpleTrader(object):
 
 
 class SimpleMarket(object):
-	def __init__(self, price_history):
+	def __init__(self, price_history, max_price=0.95, min_price=0.05):
 		self.price_history = price_history
 		self.inventory = 0
 		self.inventory_history = []
+		self.max_price = max_price
+		self.min_price = min_price
 
 	def get_last_price(self):
 		return self.price_history[-1]
@@ -76,42 +75,13 @@ class SimpleMarket(object):
 		if self.inventory > 0 and inventory_grow:
 			# Positive inventory means a lot of sellers - price should go down
 			new_price = (1 - g) * p
-			self.price_history.append(new_price)
 		elif self.inventory < 0 and inventory_grow:
 			# Negative inventory means a lot of buyers- prices go up
 			new_price = (1 + g) * p
-			self.price_history.append(new_price)
 			
 		else:
 			return None
+		new_price = np.max((self.min_price, new_price))
+		new_price = np.min((self.max_price, new_price))
+		self.price_history.append(new_price)
 
-class SimplePopulation(object):
-
-	def __init__(self, market, pop_size, mu, stdev_mu, stdev_noise, noise_prob):
-		self.market = market
-		self.pop_size = pop_size
-		self.mu = mu
-		self.stdev_noise = stdev_noise
-		self.noise_prob = noise_prob
-		self.stdev_mu = stdev_mu
-
-	def create_population(self):
-		self.traders = []
-		for i in range(self.pop_size):
-			nt = np.random.binomial(1, self.noise_prob)
-			if nt != 1:
-				mu = np.random.normal(self.mu, self.stdev_mu)
-			else:
-				p = self.market.get_last_price()
-				mu = np.random.normal(p, self.stdev_noise)
-				mu = np.max([5., mu])
-
-
-			
-			t = SimpleTrader(self.market, mu)	
-			self.traders.append(t)
-
-	def trade(self):
-		for t in self.traders:
-			t.create_trade()
-			#print self.market.get_last_price(), self.market.inventory
