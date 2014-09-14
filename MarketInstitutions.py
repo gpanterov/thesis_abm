@@ -224,9 +224,6 @@ class SimpleMarket(object):
 		self.max_price = max_price
 		self.min_price = min_price
 		self.update_timer = 0
-		self.trades_per_period = []
-		self.new_prices = []
-		self.excess_per_period = []
 		self.prior = [0.33, 0.33, 0.34]
 
 	def get_last_price(self):
@@ -236,17 +233,14 @@ class SimpleMarket(object):
 		self.inventory += - x
 		self.inventory_history.append(self.inventory)
 		self.update_timer +=1
-		self.trades_per_period.append(x)
 
-	#	if self.update_timer >= 15: 
-			 # Update price if inventory grows too much
 		if self.update_timer >= 1:
-			self.update_price2(x)
+			self.update_price(x)
 			self.update_timer = 0
 		else:
 			self.price_history.append(self.get_last_price())
 
-	def update_price2(self, x):
+	def update_price(self, x):
 		p = self.get_last_price()
 		if x > 0:
 			new_p = max_ent(p, "buy", self.prior)
@@ -260,25 +254,7 @@ class SimpleMarket(object):
 		self.price_history.append(new_price)
 
 
-	def update_price(self):	
-		p = self.get_last_price()
 
-		inventory_growth = np.abs(self.inventory_history[-1]) > np.abs(self.inventory_history[-2])
-
-		g= 0.01
-		if self.inventory > 0 and inventory_growth:
-
-			# Positive inventory means a lot of sellers - price should go down
-			new_price = (1 - g) * p
-		elif self.inventory < 0 and inventory_growth:
-			# Negative inventory means a lot of buyers- prices go up
-			new_price = (1 + g) * p
-		else:
-			new_price = p
-
-		new_price = np.max((self.min_price, new_price))
-		new_price = np.min((self.max_price, new_price))
-		self.price_history.append(new_price)
 
 class Simulation(object):
 	def __init__(self, market, all_traders, util_func = exp_util):
