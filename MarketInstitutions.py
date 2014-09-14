@@ -73,12 +73,12 @@ def compute_RSI(price_history, n):
 
 
 class SimpleTrader(object):
+	own_trades = []
+	trades_prices = []
 	def __init__(self, market, prob, pop_size):
 		self.market = market
 		self.prob = prob
-		self.own_trades = []
 		self.pop_size = pop_size
-		self.get_trade_incentive(exp_util)
 
 	def get_trade_incentive(self, util_func):
 		P = self.market.get_last_price()
@@ -103,7 +103,15 @@ class SimpleTrader(object):
 			print self.util_buy - self.util_none, self.util_sell - self.util_none
 
 		self.own_trades.append(x)
+		self.trades_prices.append(self.market.get_last_price())
+
 		self.market.submit_trade(x)
+
+	def calculate_profits(self):
+		if len(self.own_trades) < 2:
+			return None
+		profits = np.array(self.own_trades) * np.array(self.trades_prices)
+		return np.sum(profits)
 
 	def update_expectations(self):
 		pass
@@ -111,7 +119,6 @@ class SimpleTrader(object):
 class RSI_Trader(SimpleTrader):
 	def __init__(self, market, pop_size, n, overbought_level, oversold_level):
 		self.market = market
-		self.own_trades = []
 		self.pop_size = pop_size
 		self.n = n
 		self.overbought_level = overbought_level
@@ -129,6 +136,33 @@ class RSI_Trader(SimpleTrader):
 			self.prob = 1.
 		else:
 			self.prob = self.market.get_last_price()
+
+
+class Trend_Trader(SimpleTrader):
+	def __init__(self, market, pop_size, n_short, n_long) :
+		self.market = market
+		self.own_trades = []
+		self.pop_size = pop_size
+		self.n_short = n_short
+		self.n_long = n_long
+		self.prob = self.market.get_last_price()
+
+	def update_expectations(self):
+		if len(self.market.price_history) < self.n_long:
+			return None
+		prices = np.array(self.market.price_history)
+		ema_short = pd.ewma(prices, self.n_short)
+		ema_long = pd.ewma(prices, self.n_long)
+
+		if ema_short[-1] > ema_long[-1] and ema_short[-2] < ema_long[-2]: # Buy signal
+			self.prob = 1.
+		elif ema_short[-1] < ema_long[-1] and ema_short[-2] > ema_long[-2]: # Sell signal
+			self.prob = 0.
+		else:
+			pass
+		
+					
+
 
 
 class SimpleMarket(object):
