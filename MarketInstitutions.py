@@ -71,15 +71,24 @@ def CE(P, Q=[0.33,0.33,0.34]):
 	ce =  np.sum(P * np.log(P / Q))
 
 	return ce
-obj_func = lambda x: CE(x)
 
-P0 = [0.3,0.2, 0.5]
-cons = ({'type':'ineq',
-		'fun':lambda x: exp_util_v2(x, 0.6, 'buy')},
+def max_ent(price, trade_type, Q):
+	obj_func = lambda x: CE(x, Q)
+	P0 = [0.3,0.2,0.5]
+
+	cons = ({'type':'ineq',
+		'fun':lambda x: exp_util_v2(x, price, trade_type)},
 		{'type':'eq',
 		'fun':lambda x: np.sum(x) - 1},
-)
-res = minimize(obj_func, P0, method='SLSQP', constraints=cons)
+	)
+	res = minimize(obj_func, P0, method='SLSQP', constraints=cons)
+	return res.x
+#obj_func = lambda x: CE(x)
+#
+#P0 = [0.3,0.2, 0.5]
+
+
+#res = minimize(obj_func, P0, method='SLSQP', constraints=cons)
 
 def compute_RSI(price_history, n):
 	prices = np.array(price_history)
@@ -218,6 +227,7 @@ class SimpleMarket(object):
 		self.trades_per_period = []
 		self.new_prices = []
 		self.excess_per_period = []
+		self.prior = [0.33, 0.33, 0.34]
 
 	def get_last_price(self):
 		return self.price_history[-1]
@@ -231,18 +241,29 @@ class SimpleMarket(object):
 	#	if self.update_timer >= 15: 
 			 # Update price if inventory grows too much
 		if self.update_timer >= 1:
-			self.update_price()
+			self.update_price2(x)
 			self.update_timer = 0
-			self.trades_per_period = []
 		else:
 			self.price_history.append(self.get_last_price())
+
+	def update_price2(self, x):
+		p = self.get_last_price()
+		if x > 0:
+			new_p = max_ent(p, "buy", self.prior)
+		elif x < 0:
+			new_p = max_ent(p, "sell", self.prior)
+		else:
+			self.price_history.append(p)
+			return None
+		self.prior = new_p[:]
+		new_price = np.sum(new_p * np.array([0.1, 0.5, 0.9]))
+		self.price_history.append(new_price)
 
 
 	def update_price(self):	
 		p = self.get_last_price()
 
 		inventory_growth = np.abs(self.inventory_history[-1]) > np.abs(self.inventory_history[-2])
-		self.excess_per_period.append(np.mean(self.trades_per_period))
 
 		g= 0.01
 		if self.inventory > 0 and inventory_growth:
@@ -258,7 +279,6 @@ class SimpleMarket(object):
 		new_price = np.max((self.min_price, new_price))
 		new_price = np.min((self.max_price, new_price))
 		self.price_history.append(new_price)
-		self.new_prices.append(new_price)
 
 class Simulation(object):
 	def __init__(self, market, all_traders, util_func = exp_util):
