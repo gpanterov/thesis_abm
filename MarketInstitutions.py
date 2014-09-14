@@ -57,6 +57,21 @@ def exp_util(trade_type, P, prob, a=1e-2, X=1., v1=1., v2=0.):
 	else:
 		return 1 - np.exp(-a * X)
 
+
+def compute_RSI(price_history, n):
+	prices = np.array(price_history)
+	price_changes = np.log(prices[1:]) - np.log(prices[:-1])
+	U = (price_changes > 0) * price_changes
+	D = (price_changes < 0) * np.abs(price_changes)
+	
+	Uema = pd.ewma(U, n)
+	Dema = pd.ewma(D, n)
+
+	RS = 1. * Uema / Dema
+	RSI = 100 - 100. / (1 + RS)
+	return RSI
+
+
 class SimpleTrader(object):
 	def __init__(self, market, prob, pop_size):
 		self.market = market
@@ -90,17 +105,30 @@ class SimpleTrader(object):
 		self.own_trades.append(x)
 		self.market.submit_trade(x)
 
-	def update_expectations(self, n=10):
-		prices = np.array(self.market.price_history)
+	def update_expectations(self):
+		pass
 
-		if len(prices) < 3:
-			self.prob = np.random.binomial(1, 0.5)
+class RSI_Trader(SimpleTrader):
+	def __init__(self, market, pop_size, n, overbought_level, oversold_level):
+		self.market = market
+		self.own_trades = []
+		self.pop_size = pop_size
+		self.n = n
+		self.overbought_level = overbought_level
+		self.oversold_level = oversold_level
+
+	def update_expectations(self):
+		if len(self.market.price_history) < self.n:
+			self.prob = self.market.get_last_price()
+			return None
+
+		RSI = compute_RSI(self.market.price_history, self.n)
+		if RSI[-1] >= self.overbought_level:
+			self.prob = 0.
+		elif RSI[-1] <= self.oversold_level:
+			self.prob = 1.
 		else:
-			price_change = prices[1:] - prices[:-1]
-			num_hikes = 1. * np.sum(price_change[-n:] > 0) / n
-			self.prob = np.random.binomial(1, num_hikes)
-			if np.sum(price_change[-n:]) == 0:
-				self.prob = np.random.binomial(1, 0.5)
+			self.prob = self.market.get_last_price()
 
 
 class SimpleMarket(object):
@@ -142,32 +170,26 @@ class SimpleMarket(object):
 		self.price_history.append(new_price)
 
 class Simulation(object):
-	def __init__(self, market, buyers_size, sellers_size, util_func = exp_util):
-		self.buyers_size = buyers_size
-		self.sellers_size = sellers_size
-		self.noise_traders_size = 1 - buyers_size - sellers_size
+	def __init__(self, market, all_traders, util_func = exp_util):
 		self.util_func = util_func
 		self.market = market
 		self.types_of_traders = []
-		
-	def create_population(self):
-		self.Buyer = SimpleTrader(self.market, prob=1., pop_size=self.buyers_size)
-		self.Seller = SimpleTrader(self.market, prob=0., pop_size=self.sellers_size)
-		self.NoiseTrader = SimpleTrader(self.market, prob=0., pop_size=self.noise_traders_size)
-		self.NoiseTrader.update_expectations()
-		self.all_traders = [self.Buyer, self.Seller, self.NoiseTrader]
-		self.traders_sizes = [t.pop_size for t in self.all_traders]
+		self.all_traders = all_traders
+		self.update_all_traders()
+
+	def update_all_traders(self):
+		for trader in self.all_traders:
+			trader.update_expectations()
 
 	def run(self, num_trades):
+		self.traders_sizes = [t.pop_size for t in self.all_traders]
 		for i in range(num_trades):
 			trade_incentives = [i.get_trade_incentive(self.util_func) for i in self.all_traders]
 			trade_probs = np.array(self.traders_sizes) * np.array(trade_incentives)
 			cdf_vals = cdf(trade_probs)
 			trader = choice(self.all_traders, cdf_vals)
 			trader.create_trade()
-			self.NoiseTrader.update_expectations()
-			self.types_of_traders.append(trader.prob)
-
+			self.update_all_traders()
 
 	def resample_prices(self, sampling_freq=5):
 		prices = np.array(self.market.price_history)
@@ -182,23 +204,4 @@ class Simulation(object):
 		prices = prices.groupby([freq2]).mean()
 		return prices, returns
 
-class Simulation2(Simulation):
-	"""
-	Simulation with two types of traders fundamental and noise
-	"""
-	def __init__(self, market, fundamental_size, prob, util_func = exp_util):
-		self.fundamental_size = fundamental_size
-		self.noise_traders_size = 1 - fundamental_size
-		self.util_func = util_func
-		self.market = market
-		self.prob = prob
-		self.types_of_traders = []
-
-	def create_population(self):
-		self.FundamentalTrader = SimpleTrader(self.market, 
-								prob=self.prob, pop_size=self.fundamental_size)
-		self.NoiseTrader = SimpleTrader(self.market, prob=0., pop_size=self.noise_traders_size)
-		self.NoiseTrader.update_expectations()
-		self.all_traders = [self.FundamentalTrader, self.NoiseTrader]
-		self.traders_sizes = [t.pop_size for t in self.all_traders]
 
