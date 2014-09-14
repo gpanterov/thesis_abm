@@ -7,6 +7,9 @@ from scipy.optimize import minimize
 import statsmodels.api as sm
 import random
 from bisect import bisect
+import pandas as pd
+
+
 
 def cdf(weights):
 	total=sum(weights) * 1.
@@ -98,7 +101,7 @@ class SimpleTrader(object):
 
 class SimpleMarket(object):
 	def __init__(self, price_history, max_price=0.95, min_price=0.05):
-		self.price_history = price_history
+		self.price_history = price_history[:]
 		self.inventory = 0
 		self.inventory_history = []
 		self.max_price = max_price
@@ -141,6 +144,7 @@ class Simulation(object):
 		self.noise_traders_size = 1 - buyers_size - sellers_size
 		self.util_func = util_func
 		self.market = market
+
 	def create_population(self):
 		self.Buyer = SimpleTrader(self.market, prob=1., pop_size=self.buyers_size)
 		self.Seller = SimpleTrader(self.market, prob=0., pop_size=self.sellers_size)
@@ -158,4 +162,15 @@ class Simulation(object):
 			trader.create_trade()
 			self.NoiseTrader.update_expectations()
 
+	def resample_prices(self, sampling_freq=5):
+		prices = np.array(self.market.price_history)
+		delta = (prices[1:] - prices[0:-1]) / prices[0:-1]
+		s = pd.Series(delta)
+		freq = s.index / sampling_freq
 
+		returns = s.groupby([freq]).mean()
+		
+		prices = pd.Series(prices)	
+		freq2 = prices.index / sampling_freq
+		prices = prices.groupby([freq2]).mean()
+		return prices, returns
