@@ -8,7 +8,7 @@ import statsmodels.api as sm
 import random
 from bisect import bisect
 import pandas as pd
-
+from scipy.optimize import minimize
 
 
 def cdf(weights):
@@ -57,6 +57,29 @@ def exp_util(trade_type, P, prob, a=1e-2, X=1., v1=1., v2=0.):
 	else:
 		return 1 - np.exp(-a * X)
 
+def exp_util_v2(P, price, trade_type, V=[0.1, 0.5, .9], a=1e-2):
+	P = np.array(P)
+	V = np.array(V)
+	if trade_type == "buy":
+		return np.sum(P * (1 - np.exp(- a * (V - price))))
+	elif trade_type == "sell":
+		return np.sum(P * (1 - np.exp(- a * (price - V))))
+
+def CE(P, Q=[0.33,0.33,0.34]):
+	P = np.array(P)
+	Q = np.array(Q)
+	ce =  np.sum(P * np.log(P / Q))
+
+	return ce
+obj_func = lambda x: CE(x)
+
+P0 = [0.3,0.2, 0.5]
+cons = ({'type':'ineq',
+		'fun':lambda x: exp_util_v2(x, 0.6, 'buy')},
+		{'type':'eq',
+		'fun':lambda x: np.sum(x) - 1},
+)
+res = minimize(obj_func, P0, method='SLSQP', constraints=cons)
 
 def compute_RSI(price_history, n):
 	prices = np.array(price_history)
@@ -207,7 +230,7 @@ class SimpleMarket(object):
 
 	#	if self.update_timer >= 15: 
 			 # Update price if inventory grows too much
-		if self.update_timer >= 15:
+		if self.update_timer >= 1:
 			self.update_price()
 			self.update_timer = 0
 			self.trades_per_period = []
@@ -272,5 +295,4 @@ class Simulation(object):
 		freq2 = prices.index / sampling_freq
 		prices = prices.groupby([freq2]).mean()
 		return prices, returns
-
 
