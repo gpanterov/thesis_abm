@@ -224,7 +224,7 @@ class SimpleMarket(object):
 		self.max_price = max_price
 		self.min_price = min_price
 		self.update_timer = 0
-		self.prior = [0.33, 0.33, 0.34]
+		self.prior = [0.5, 0.3, 0.2]
 
 	def get_last_price(self):
 		return self.price_history[-1]
@@ -240,7 +240,7 @@ class SimpleMarket(object):
 		else:
 			self.price_history.append(self.get_last_price())
 
-	def update_price(self, x):
+	def update_price(self, x, max_tick=2):
 		p = self.get_last_price()
 		if x > 0:
 			new_p = max_ent(p, "buy", self.prior)
@@ -251,6 +251,15 @@ class SimpleMarket(object):
 			return None
 		self.prior = new_p[:]
 		new_price = np.sum(new_p * np.array([0.1, 0.5, 0.9]))
+		if new_price > p and new_price - p > max_tick * 0.01:
+			new_price = p + max_tick * 0.01
+		elif new_price < p and p - new_price > max_tick * 0.01:
+			new_price = p - max_tick * 0.01
+		elif new_price > p and new_price - p < 0.01:
+			new_price = p + 0.01
+		elif new_price < p and p - new_price < 0.01:
+			new_price = p - 0.01
+
 		self.price_history.append(new_price)
 
 
