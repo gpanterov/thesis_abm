@@ -134,3 +134,28 @@ class SimpleMarket(object):
 		new_price = np.min((self.max_price, new_price))
 		self.price_history.append(new_price)
 
+class Simulation(object):
+	def __init__(self, market, buyers_size, sellers_size, util_func = exp_util):
+		self.buyers_size = buyers_size
+		self.sellers_size = sellers_size
+		self.noise_traders_size = 1 - buyers_size - sellers_size
+		self.util_func = util_func
+		self.market = market
+	def create_population(self):
+		self.Buyer = SimpleTrader(self.market, prob=1., pop_size=self.buyers_size)
+		self.Seller = SimpleTrader(self.market, prob=0., pop_size=self.sellers_size)
+		self.NoiseTrader = SimpleTrader(self.market, prob=0., pop_size=self.noise_traders_size)
+		self.NoiseTrader.update_expectations()
+		self.all_traders = [self.Buyer, self.Seller, self.NoiseTrader]
+		self.traders_sizes = [t.pop_size for t in self.all_traders]
+
+	def run(self, num_trades):
+		for i in range(num_trades):
+			trade_incentives = [i.get_trade_incentive(self.util_func) for i in self.all_traders]
+			trade_probs = np.array(self.traders_sizes) * np.array(trade_incentives)
+			cdf_vals = cdf(trade_probs)
+			trader = choice(self.all_traders, cdf_vals)
+			trader.create_trade()
+			self.NoiseTrader.update_expectations()
+
+
