@@ -73,12 +73,13 @@ def compute_RSI(price_history, n):
 
 
 class SimpleTrader(object):
-	own_trades = []
-	trades_prices = []
+
 	def __init__(self, market, prob, pop_size):
 		self.market = market
 		self.prob = prob
 		self.pop_size = pop_size
+		self.own_trades = []
+		self.trades_prices = []
 
 	def get_trade_incentive(self, util_func):
 		P = self.market.get_last_price()
@@ -91,7 +92,7 @@ class SimpleTrader(object):
 		return self.trade_incentive
 
 	def create_trade(self):
-		self.get_trade_incentive(exp_util)
+		ti = self.get_trade_incentive(exp_util)
 
 		if self.util_buy == self.trade_incentive + self.util_none:
 			# Buy
@@ -104,7 +105,6 @@ class SimpleTrader(object):
 
 		self.own_trades.append(x)
 		self.trades_prices.append(self.market.get_last_price())
-
 		self.market.submit_trade(x)
 
 	def calculate_profits(self):
@@ -123,10 +123,12 @@ class RSI_Trader(SimpleTrader):
 		self.n = n
 		self.overbought_level = overbought_level
 		self.oversold_level = oversold_level
+		self.own_trades = []
+		self.trades_prices = []
 
 	def update_expectations(self):
 		if len(self.market.price_history) < self.n:
-			self.prob = self.market.get_last_price()
+			self.prob = self.market.get_last_price() + np.random.normal(0, 0.01)
 			return None
 
 		RSI = compute_RSI(self.market.price_history, self.n)
@@ -135,20 +137,23 @@ class RSI_Trader(SimpleTrader):
 		elif RSI[-1] <= self.oversold_level:
 			self.prob = 1.
 		else:
-			self.prob = self.market.get_last_price()
+			self.prob = self.market.get_last_price()+ np.random.normal(0, 0.01)
+
 
 
 class Trend_Trader(SimpleTrader):
 	def __init__(self, market, pop_size, n_short, n_long) :
 		self.market = market
-		self.own_trades = []
 		self.pop_size = pop_size
 		self.n_short = n_short
 		self.n_long = n_long
-		self.prob = self.market.get_last_price()
+		self.own_trades = []
+		self.trades_prices = []
 
 	def update_expectations(self):
 		if len(self.market.price_history) < self.n_long:
+
+			self.prob = self.market.get_last_price() + np.random.normal(0, 0.01)
 			return None
 		prices = np.array(self.market.price_history)
 		ema_short = pd.ewma(prices, self.n_short)
@@ -172,36 +177,51 @@ class SimpleMarket(object):
 		self.inventory_history = []
 		self.max_price = max_price
 		self.min_price = min_price
-
+		self.update_inventory = []
+		self.all_inventory_changes = []
+		self.all_new_prices = []
 	def get_last_price(self):
 		return self.price_history[-1]
 
 	def submit_trade(self, x):
 		self.inventory += - x
 		self.inventory_history.append(self.inventory)
-
-		if np.abs(self.inventory) > 1:  # Update price if inventory grows too much
+		self.update_inventory.append(self.inventory)
+		if len(self.update_inventory)==10:  # Update price if inventory grows too much
 			self.update_price()
+			self.update_inventory = []
 		else:
 			self.price_history.append(self.get_last_price())
 
 
-	def update_price(self, g=0.01):
+	def update_price(self):
 		p = self.get_last_price()
-		inventory_grow = np.abs(self.inventory_history[-1]) > np.abs(self.inventory_history[-2])
-
-		if self.inventory > 0 and inventory_grow:
+		inventory_change = self.update_inventory[-1] - self.update_inventory[0]
+		G = {0 : 0.,
+			1 : 0.,
+			2 : 0.,
+			3: 0.005,
+			4: 0.01,
+			5: 0.01,
+			6: 0.01,
+			7: 0.02,
+			8: 0.025,
+			9: 0.025}
+		k = int(np.abs(inventory_change))
+		g = G[k]
+		self.all_inventory_changes.append(k)
+		if np.mean(self.update_inventory) >= 0:
 			# Positive inventory means a lot of sellers - price should go down
 			new_price = (1 - g) * p
-		elif self.inventory < 0 and inventory_grow:
+		elif np.mean(self.update_inventory) < 0:
 			# Negative inventory means a lot of buyers- prices go up
 			new_price = (1 + g) * p
-			
-		else:
-			new_price = p
+
 		new_price = np.max((self.min_price, new_price))
 		new_price = np.min((self.max_price, new_price))
 		self.price_history.append(new_price)
+
+		self.all_new_prices.append(new_price)
 
 class Simulation(object):
 	def __init__(self, market, all_traders, util_func = exp_util):
@@ -217,9 +237,12 @@ class Simulation(object):
 
 	def run(self, num_trades):
 		self.traders_sizes = [t.pop_size for t in self.all_traders]
-		for i in range(num_trades):
+		self.all_trade_probs = np.empty((num_trades, len(self.traders_sizes)))
+		for t in range(num_trades):
 			trade_incentives = [i.get_trade_incentive(self.util_func) for i in self.all_traders]
 			trade_probs = np.array(self.traders_sizes) * np.array(trade_incentives)
+			self.trade_probs = trade_probs
+			self.all_trade_probs[t, :] = trade_probs
 			cdf_vals = cdf(trade_probs)
 			trader = choice(self.all_traders, cdf_vals)
 			trader.create_trade()
