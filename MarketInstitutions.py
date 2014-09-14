@@ -46,7 +46,7 @@ def log_util(trade_type, P, prob,  X=1., v1=1., v2=0.):
 	else:
 		return np.log(X)
 
-def exp_util(trade_type, P, prob, a=1e-3, X=1., v1=1., v2=0.):
+def exp_util(trade_type, P, prob, a=1e-2, X=1., v1=1., v2=0.):
 	if trade_type == "buy":
 		return prob * ( 1 - np.exp(- a * (X + v1 - P))) + \
 					(1 - prob) * (1 - np.exp(- a * (X + v2 - P)))
@@ -71,19 +71,22 @@ class SimpleTrader(object):
 		self.util_sell = util_func("sell", P, self.prob)
 		self.util_none = util_func(None, P, self.prob)
 
-		self.trade_incentive = np.max((self.util_buy, self.util_sell, self.util_none)) / \
-															 self.util_none - 1
+		self.trade_incentive = np.max((self.util_buy, self.util_sell, self.util_none)) - \
+															 self.util_none
 		return self.trade_incentive
+
 	def create_trade(self):
 		self.get_trade_incentive(exp_util)
 
-		if self.util_buy == (self.trade_incentive + 1) * self.util_none:
+		if self.util_buy == self.trade_incentive + self.util_none:
 			# Buy
 			x = 1.
-		elif self.util_sell == (self.trade_incentive + 1) * self.util_none:
+		elif self.util_sell == self.trade_incentive +  self.util_none:
 			x = -1.
 		else:
-			return None
+			x = 0.
+			print self.util_buy - self.util_none, self.util_sell - self.util_none
+
 		self.own_trades.append(x)
 		self.market.submit_trade(x)
 
@@ -98,6 +101,7 @@ class SimpleTrader(object):
 			self.prob = np.random.binomial(1, num_hikes)
 			if np.sum(price_change[-n:]) == 0:
 				self.prob = np.random.binomial(1, 0.5)
+
 
 class SimpleMarket(object):
 	def __init__(self, price_history, max_price=0.95, min_price=0.05):
@@ -144,7 +148,8 @@ class Simulation(object):
 		self.noise_traders_size = 1 - buyers_size - sellers_size
 		self.util_func = util_func
 		self.market = market
-
+		self.types_of_traders = []
+		
 	def create_population(self):
 		self.Buyer = SimpleTrader(self.market, prob=1., pop_size=self.buyers_size)
 		self.Seller = SimpleTrader(self.market, prob=0., pop_size=self.sellers_size)
@@ -161,6 +166,8 @@ class Simulation(object):
 			trader = choice(self.all_traders, cdf_vals)
 			trader.create_trade()
 			self.NoiseTrader.update_expectations()
+			self.types_of_traders.append(trader.prob)
+
 
 	def resample_prices(self, sampling_freq=5):
 		prices = np.array(self.market.price_history)
@@ -174,3 +181,24 @@ class Simulation(object):
 		freq2 = prices.index / sampling_freq
 		prices = prices.groupby([freq2]).mean()
 		return prices, returns
+
+class Simulation2(Simulation):
+	"""
+	Simulation with two types of traders fundamental and noise
+	"""
+	def __init__(self, market, fundamental_size, prob, util_func = exp_util):
+		self.fundamental_size = fundamental_size
+		self.noise_traders_size = 1 - fundamental_size
+		self.util_func = util_func
+		self.market = market
+		self.prob = prob
+		self.types_of_traders = []
+
+	def create_population(self):
+		self.FundamentalTrader = SimpleTrader(self.market, 
+								prob=self.prob, pop_size=self.fundamental_size)
+		self.NoiseTrader = SimpleTrader(self.market, prob=0., pop_size=self.noise_traders_size)
+		self.NoiseTrader.update_expectations()
+		self.all_traders = [self.FundamentalTrader, self.NoiseTrader]
+		self.traders_sizes = [t.pop_size for t in self.all_traders]
+
