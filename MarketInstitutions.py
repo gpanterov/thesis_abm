@@ -32,7 +32,14 @@ def choice(population, cdf_vals):
 	-------
 	An element from the list population
 	"""
+
 	assert len(population) == len(cdf_vals)
+
+	if np.sum(np.isnan(cdf_vals)) > 0:
+		print "Zero incentive (pick one at random)"
+		i = np.random.randint(0, len(cdf_vals))
+		return population[i]
+
 	x = random.random()
 	idx = bisect(cdf_vals,x)
 	return population[idx]
@@ -166,8 +173,10 @@ class RSI_Trader(SimpleTrader):
 		RSI = compute_RSI(self.market.price_history, self.n)
 		if RSI[-1] >= self.overbought_level:
 			self.prob = 0.
+			#print "Overbought", RSI[-1]
 		elif RSI[-1] <= self.oversold_level:
 			self.prob = 1.
+			#print "Oversold", RSI[-1]
 		else:
 			self.prob = self.market.get_last_price()+ np.random.normal(0, 0.01)
 
@@ -193,8 +202,10 @@ class Trend_Trader(SimpleTrader):
 
 		if ema_short[-1] > ema_long[-1] and ema_short[-2] < ema_long[-2]: # Buy signal
 			self.prob = 1.
+			#print "Trend trader - Short EMA crossed long from below (buy)"
 		elif ema_short[-1] < ema_long[-1] and ema_short[-2] > ema_long[-2]: # Sell signal
 			self.prob = 0.
+			#print "Trend trader - short EMA crossed long from above (sell)"
 		else:
 			pass
 		
@@ -284,8 +295,14 @@ class Simulation(object):
 			trade_probs = np.array(self.traders_sizes) * np.array(trade_incentives)
 			self.trade_probs = trade_probs
 			cdf_vals = cdf(trade_probs)
+
 			trader = choice(self.all_traders, cdf_vals)
+
+			print "Current market price is: ", self.market.get_last_price()
 			trader.create_trade()
+			print "Trader ", trader.__class__, " with prob: ", trader.prob, \
+						" traded ", trader.own_trades[-1]
+			print "---" * 10
 			self.update_all_traders()
 
 	def resample_prices(self, sampling_freq=5):
