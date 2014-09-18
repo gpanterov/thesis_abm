@@ -246,7 +246,7 @@ class RandomTrader(SimpleTrader):
 
 
 class TrendFollower(SimpleTrader):
-	def __init__(self, market, pop_size, n=5, threshold=0.6):
+	def __init__(self, market, pop_size, n=5, threshold=0.8):
 		self.market = market
 		self.pop_size = pop_size
 		self.n = n
@@ -261,14 +261,12 @@ class TrendFollower(SimpleTrader):
 		x = calculate_changes(self.market.price_history)
 		share_positive_changes = 1. * np.sum(x[-self.n : ] > 0) / self.n
 		share_negative_changes = 1. * np.sum(x[-self.n : ] < 0) / self.n
-		if share_positive_changes >= self.threshold:
+		if share_positive_changes > self.threshold:
 			self.prob = 1.
-		elif share_negative_changes < 1 - self.threshold:
+		elif share_negative_changes > self.threshold:
 			self.prob = 0.
 		else:
-			# Takes prevoius value for self.prob
-			return None
-
+			self.prob = np.random.binomial(1, 0.5) * 1.
 
 			
 
@@ -298,7 +296,7 @@ class SimpleMarket(object):
 		else:
 			self.price_history.append(self.get_last_price())
 
-	def update_price(self, x, max_tick=2):
+	def update_price(self, x):
 		p = self.get_last_price()
 		if x > 0:
 			new_p = max_ent(p, "buy", self.prior)
@@ -309,14 +307,14 @@ class SimpleMarket(object):
 			return None
 		self.prior = new_p[:]
 		new_price = np.sum(new_p * np.array([0.1, 0.5, 0.9]))
-		if new_price > p and new_price - p > max_tick * 0.01:
-			new_price = p + max_tick * 0.01
-		elif new_price < p and p - new_price > max_tick * 0.01:
-			new_price = p - max_tick * 0.01
-		elif new_price > p and new_price - p < 0.01:
-			new_price = p + 0.01
-		elif new_price < p and p - new_price < 0.01:
-			new_price = p - 0.01
+		if new_price > p and new_price - p >= 0.5 * self.tick:
+			new_price = p + self.tick
+		elif new_price < p and p - new_price >= 0.5 * self.tick:
+			new_price = p - self.tick
+		elif new_price > p and new_price - p < 0.5 * self.tick:
+			new_price = p + self.tick
+		elif new_price < p and p - new_price < 0.5 * self.tick:
+			new_price = p - self.tick
 
 		self.price_history.append(new_price)
 
@@ -337,19 +335,18 @@ class Simulation(object):
 
 	def run(self, num_trades):
 		self.traders_sizes = [t.pop_size for t in self.all_traders]
-		for t in range(num_trades):
+		for i, t in enumerate(range(num_trades)):
 			trade_incentives = [i.get_trade_incentive(self.util_func) for i in self.all_traders]
 			trade_probs = np.array(self.traders_sizes) * np.array(trade_incentives)
 			self.trade_probs = trade_probs
 			cdf_vals = cdf(trade_probs)
 
 			trader = choice(self.all_traders, cdf_vals)
-
-			print "Current market price is: ", self.market.get_last_price()
+			#print "Current market price is: ", self.market.get_last_price()
 			trader.create_trade()
-			print "Trader ", trader.__class__, " with prob: ", trader.prob, \
-						" traded ", trader.own_trades[-1]
-			print "---" * 10
+			#print "Trader ", trader.__class__, " with prob: ", trader.prob, \
+			#			" traded ", trader.own_trades[-1]
+			#print "---" * 10
 			self.update_all_traders()
 
 	def resample_prices(self, sampling_freq=5):
