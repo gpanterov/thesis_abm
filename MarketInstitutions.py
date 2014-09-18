@@ -123,8 +123,8 @@ def max_ent_v2(price, Q, b, actual, N):
 		{'type':'eq',
 		'fun':lambda x: np.sum(x) - 1},
 	)
-	res = minimize(obj_func, P0, method='SLSQP', constraints=cons, options={'disp':True})
-	return res.x
+	res = minimize(obj_func, P0, method='SLSQP', constraints=cons)
+	return res
 
 def calculate_changes(some_list):
 	x = np.array(some_list)
@@ -159,6 +159,8 @@ class SimpleTrader(object):
 		self.pop_size = pop_size
 		self.own_trades = []
 		self.trades_prices = []
+		self.trader_name = "Simple Trader"
+
 
 	def get_trade_incentive(self, util_func):
 		P = self.market.get_last_price()
@@ -230,7 +232,7 @@ class Trend_Trader(SimpleTrader):
 		self.n_long = n_long
 		self.own_trades = []
 		self.trades_prices = []
-
+		
 	def update_expectations(self):
 		if len(self.market.price_history) < self.n_long:
 
@@ -275,6 +277,7 @@ class RandomTrader(SimpleTrader):
 		self.pop_size = pop_size
 		self.own_trades = []
 		self.trades_prices = []
+		self.trader_name = "Random Trader"
 
 	def update_expectations(self):
 		self.prob = np.random.binomial(1, 0.5) * 1.
@@ -315,21 +318,38 @@ class SimpleMarket(object):
 		self.min_price = min_price
 		self.tick = tick
 		self.update_timer = 0
-		self.prior = max_ent(self.price_history[-1], "buy", [0.33,0.33,0.34])
-	
+		#self.prior = max_ent(self.price_history[-1], "buy", [0.33,0.33,0.34])
+		self.prior = np.array([0.33,0.33,0.34])
+		self.update_inventory = 0
+
 	def get_last_price(self):
 		return self.price_history[-1]
 
 	def submit_trade(self, x):
 		self.inventory += - x
+		self.update_inventory += +x
 		self.inventory_history.append(self.inventory)
 		self.update_timer +=1
 
-		if self.update_timer >= 1:
-			self.update_price(x)
+		if self.update_timer >= 10:
+			self.update_price_multiple_periods(len(self.inventory_history) - 1)
+			#self.update_price(x)
 			self.update_timer = 0
+			#self.update_inventory = 0
 		else:
 			self.price_history.append(self.get_last_price())
+
+	def update_price_multiple_periods(self, N):
+		p = self.get_last_price()
+		actual = self.update_inventory
+		#actual = -(self.inventory_history[-1] - self.inventory_history[-N])
+		print "Outstanding inventory since last price change is: ", actual
+		res = max_ent_v2(p, [0.33, 0.33, 0.34], 0.8, actual, N)
+		if res.success:
+			self.prior = res.x
+
+		new_price = np.sum(res.x * np.array([0.1, 0.5, 0.9]))
+		self.price_history.append(new_price)
 
 	def update_price(self, x):
 		p = self.get_last_price()
@@ -374,15 +394,12 @@ class Simulation(object):
 		for i, t in enumerate(range(num_trades)):
 			trade_incentives = [i.get_trade_incentive(self.util_func) for i in self.all_traders]
 			trade_probs = np.array(self.traders_sizes) * np.array(trade_incentives)
-			self.trade_probs = trade_probs
+			self.trade_probs = trade_probs / np.sum(trade_probs)
 			cdf_vals = cdf(trade_probs)
 
 			trader = choice(self.all_traders, cdf_vals)
-			#print "Current market price is: ", self.market.get_last_price()
+			print trader.trader_name	
 			trader.create_trade()
-			#print "Trader ", trader.__class__, " with prob: ", trader.prob, \
-			#			" traded ", trader.own_trades[-1]
-			#print "---" * 10
 			self.update_all_traders()
 
 	def resample_prices(self, sampling_freq=5):
