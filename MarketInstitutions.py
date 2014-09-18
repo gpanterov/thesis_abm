@@ -91,6 +91,41 @@ def max_ent(price, trade_type, Q):
 	res = minimize(obj_func, P0, method='SLSQP', constraints=cons)
 	return res.x
 
+
+def exp_util_v3(P, price, trade_type, V=[0.1, 0.5, .9], a=1e-2):
+	""" Returns zero if utility is negative """
+	P = np.array(P)
+	V = np.array(V)
+	if trade_type == "buy":
+		return np.max((0, np.sum(P * (1 - np.exp(- a * (V - price))))))
+	elif trade_type == "sell":
+		return np.max((0, np.sum(P * (1 - np.exp(- a * (price - V))))))
+
+
+def cons_func(x, price, b):
+	denom = b * exp_util_v3(x, price, "buy") + b * exp_util_v3(x, price, "sell") + \
+				0.5 * (1 -b) * exp_util_v3([0.,0.,1.], price, "buy") + 0.5*(1 - b)*exp_util_v3([1.,0.,0.], price, "sell") 
+	fundamental_buys = b * exp_util_v3(x, price, "buy") / denom 
+	fundamental_sells = b * exp_util_v3(x, price, "sell")/denom 
+
+	noise_buys = 0.5*(1 -b) * exp_util_v3([0.,0.,1.], price, "buy") / denom
+	noise_sells = 0.5*(1 - b)*exp_util_v3([1.,0.,0.], price, "sell") / denom
+	
+	expected_net_trades = fundamental_buys - fundamental_sells + noise_buys - noise_sells
+#	return fundamental_buys, fundamental_sells, noise_buys, noise_sells
+	return expected_net_trades
+
+def max_ent_v2(price, Q, b, actual, N):
+	obj_func = lambda x: CE(x, Q)
+	P0 = [0.3,0.2,0.5]
+	cons = ({'type':'eq',
+		'fun': lambda x: N * cons_func(x, price, b) - actual},
+		{'type':'eq',
+		'fun':lambda x: np.sum(x) - 1},
+	)
+	res = minimize(obj_func, P0, method='SLSQP', constraints=cons, options={'disp':True})
+	return res.x
+
 def calculate_changes(some_list):
 	x = np.array(some_list)
 	assert np.sum(x>0) == len(x)  # all values must be positive
@@ -280,7 +315,7 @@ class SimpleMarket(object):
 		self.min_price = min_price
 		self.tick = tick
 		self.update_timer = 0
-		self.prior = [0.5, 0.3, 0.2]
+		self.prior = max_ent(self.price_history[-1], "buy", [0.33,0.33,0.34])
 	
 	def get_last_price(self):
 		return self.price_history[-1]
@@ -307,14 +342,15 @@ class SimpleMarket(object):
 			return None
 		self.prior = new_p[:]
 		new_price = np.sum(new_p * np.array([0.1, 0.5, 0.9]))
-		if new_price > p and new_price - p >= 0.5 * self.tick:
-			new_price = p + self.tick
-		elif new_price < p and p - new_price >= 0.5 * self.tick:
-			new_price = p - self.tick
-		elif new_price > p and new_price - p < 0.5 * self.tick:
-			new_price = p + self.tick
-		elif new_price < p and p - new_price < 0.5 * self.tick:
-			new_price = p - self.tick
+
+#		if new_price > p and new_price - p >= 0.5 * self.tick:
+#			new_price = p + self.tick
+#		elif new_price < p and p - new_price >= 0.5 * self.tick:
+#			new_price = p - self.tick
+#		elif new_price > p and new_price - p < 0.5 * self.tick:
+#			new_price = p + self.tick
+#		elif new_price < p and p - new_price < 0.5 * self.tick:
+#			new_price = p - self.tick
 
 		self.price_history.append(new_price)
 
