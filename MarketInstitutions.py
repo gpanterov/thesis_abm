@@ -90,6 +90,11 @@ def max_ent(price, trade_type, Q):
 	)
 	res = minimize(obj_func, P0, method='SLSQP', constraints=cons)
 	return res.x
+
+def calculate_changes(some_list):
+	x = np.array(some_list)
+	assert np.sum(x>0) == len(x)  # all values must be positive
+	return np.log(x[1:]) - np.log(x[:-1])
 #obj_func = lambda x: CE(x)
 #
 #P0 = [0.3,0.2, 0.5]
@@ -227,16 +232,58 @@ class Contrarian(SimpleTrader):
 		ema = pd.ewma(prices, self.n)
 		self.prob = ema[-1]
 
+
+
+class RandomTrader(SimpleTrader):
+	def __init__(self, market, pop_size):
+		self.market = market
+		self.pop_size = pop_size
+		self.own_trades = []
+		self.trades_prices = []
+
+	def update_expectations(self):
+		self.prob = np.random.binomial(1, 0.5) * 1.
+
+
+class TrendFollower(SimpleTrader):
+	def __init__(self, market, pop_size, n=5, threshold=0.6):
+		self.market = market
+		self.pop_size = pop_size
+		self.n = n
+		self.threshold = threshold
+		self.own_trades = []
+		self.trades_prices = []
+	
+	def update_expectations(self):
+		if len(self.market.price_history) < self.n:
+			self.prob = np.random.binomial(1, 0.5) * 1.
+			return None
+		x = calculate_changes(self.market.price_history)
+		share_positive_changes = 1. * np.sum(x[-self.n : ] > 0) / self.n
+		share_negative_changes = 1. * np.sum(x[-self.n : ] < 0) / self.n
+		if share_positive_changes >= self.threshold:
+			self.prob = 1.
+		elif share_negative_changes < 1 - self.threshold:
+			self.prob = 0.
+		else:
+			# Takes prevoius value for self.prob
+			return None
+
+
+			
+
+
 class SimpleMarket(object):
-	def __init__(self, price_history, max_price=0.95, min_price=0.05):
+	def __init__(self, price_history, max_price=0.95, min_price=0.05, tick=0.01):
 		self.price_history = price_history[:]
 		self.inventory = 0
 		self.inventory_history = [0]
 		self.max_price = max_price
 		self.min_price = min_price
+		self.tick = tick
 		self.update_timer = 0
 		self.prior = [0.5, 0.3, 0.2]
-
+	
 	def get_last_price(self):
 		return self.price_history[-1]
 
