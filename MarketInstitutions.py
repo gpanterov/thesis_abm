@@ -102,14 +102,30 @@ def exp_util_v3(P, price, trade_type, V=[0.1, 0.5, .9], a=1e-2):
 		return np.max((0, np.sum(P * (1 - np.exp(- a * (price - V))))))
 
 
-def cons_func(x, price, b):
-	denom = b * exp_util_v3(x, price, "buy") + b * exp_util_v3(x, price, "sell") + \
-				0.5 * (1 -b) * exp_util_v3([0.,0.,1.], price, "buy") + 0.5*(1 - b)*exp_util_v3([1.,0.,0.], price, "sell") 
-	fundamental_buys = b * exp_util_v3(x, price, "buy") / denom 
-	fundamental_sells = b * exp_util_v3(x, price, "sell")/denom 
+def exp_util_v4(P, price, trade_type, V=[0.1, 0.5, .9], a=1e-2):
+	""" Returns zero if utility is negative """
+	P = np.array(P)
+	V = np.array(V)
+	if trade_type == "buy":
+		if np.sum(P * (1 - np.exp(- a * (V - price)))) > 0:
+			return 1.
+		else:
+			return 0.
+	elif trade_type == "sell":
+		if np.sum(P * (1 - np.exp(- a * (price - V)))) > 0:
+			return 1.
+		else:
+			return 0.
 
-	noise_buys = 0.5*(1 -b) * exp_util_v3([0.,0.,1.], price, "buy") / denom
-	noise_sells = 0.5*(1 - b)*exp_util_v3([1.,0.,0.], price, "sell") / denom
+
+def cons_func(x, price, b, util_func=exp_util_v3):
+	denom = b * util_func(x, price, "buy") + b * util_func(x, price, "sell") + \
+				0.5 * (1 -b) * util_func([0.,0.,1.], price, "buy") + 0.5*(1 - b)*util_func([1.,0.,0.], price, "sell") 
+	fundamental_buys = b * util_func(x, price, "buy") / denom 
+	fundamental_sells = b * util_func(x, price, "sell")/denom 
+
+	noise_buys = 0.5*(1 -b) * util_func([0.,0.,1.], price, "buy") / denom
+	noise_sells = 0.5*(1 - b)*util_func([1.,0.,0.], price, "sell") / denom
 	
 	expected_net_trades = fundamental_buys - fundamental_sells + noise_buys - noise_sells
 #	return fundamental_buys, fundamental_sells, noise_buys, noise_sells
@@ -120,6 +136,32 @@ def max_ent_v2(price, Q, b, actual, N):
 	P0 = [0.3,0.2,0.5]
 	cons = ({'type':'eq',
 		'fun': lambda x: N * cons_func(x, price, b) - actual},
+		{'type':'eq',
+		'fun':lambda x: np.sum(x) - 1},
+	)
+	res = minimize(obj_func, P0, method='SLSQP', constraints=cons)
+	return res
+
+def cons_func_multi(x, prices, b):
+	expected_net_trades = 0
+	for  price in prices:
+		denom = b * exp_util_v3(x, price, "buy") + b * exp_util_v3(x, price, "sell") + \
+					0.5 * (1 -b) * exp_util_v3([0.,0.,1.], price, "buy") + 0.5*(1 - b)*exp_util_v3([1.,0.,0.], price, "sell") 
+		fundamental_buys = b * exp_util_v3(x, price, "buy") / denom 
+		fundamental_sells = b * exp_util_v3(x, price, "sell")/denom 
+
+		noise_buys = 0.5*(1 -b) * exp_util_v3([0.,0.,1.], price, "buy") / denom
+		noise_sells = 0.5*(1 - b)*exp_util_v3([1.,0.,0.], price, "sell") / denom
+	
+		expected_net_trades += fundamental_buys - fundamental_sells + noise_buys - noise_sells
+#	return fundamental_buys, fundamental_sells, noise_buys, noise_sells
+	return expected_net_trades
+
+def max_ent_multi(price, PRICES, Q, b, actual, N):
+	obj_func = lambda x: CE(x, Q)
+	P0 = [0.3,0.2,0.5]
+	cons = ({'type':'eq',
+		'fun': lambda x: N * cons_func(x, price, b) + N*cons_func_multi(x, PRICES,b) - actual},
 		{'type':'eq',
 		'fun':lambda x: np.sum(x) - 1},
 	)
@@ -182,7 +224,7 @@ class SimpleTrader(object):
 			x = -1.
 		else:
 			x = 0.
-			print self.util_buy - self.util_none, self.util_sell - self.util_none
+
 
 		self.own_trades.append(x)
 		self.trades_prices.append(self.market.get_last_price())
@@ -320,35 +362,34 @@ class SimpleMarket(object):
 		self.update_timer = 0
 		#self.prior = max_ent(self.price_history[-1], "buy", [0.33,0.33,0.34])
 		self.prior = np.array([0.33,0.33,0.34])
-		self.update_inventory = 0
+		self.New_Prices = []
 
 	def get_last_price(self):
 		return self.price_history[-1]
 
 	def submit_trade(self, x):
 		self.inventory += - x
-		self.update_inventory += +x
 		self.inventory_history.append(self.inventory)
 		self.update_timer +=1
 
-		if self.update_timer >= 10:
-			self.update_price_multiple_periods(len(self.inventory_history) - 1)
-			#self.update_price(x)
+		if self.update_timer >= 1:
+			#self.update_price_multiple_periods(10)
+			self.update_price(x)
 			self.update_timer = 0
-			#self.update_inventory = 0
 		else:
 			self.price_history.append(self.get_last_price())
 
 	def update_price_multiple_periods(self, N):
 		p = self.get_last_price()
-		actual = self.update_inventory
-		#actual = -(self.inventory_history[-1] - self.inventory_history[-N])
-		print "Outstanding inventory since last price change is: ", actual
-		res = max_ent_v2(p, [0.33, 0.33, 0.34], 0.8, actual, N)
+		self.New_Prices.append(p)
+		actual = -self.inventory_history[-1] + self.inventory_history[-N-1]
+		res = max_ent_v2(p, self.prior, 0.8, actual, N)
+		#res = max_ent_multi(p, self.New_Prices, [0.33,0.33,0.34], 0.8, actual, N)
 		if res.success:
 			self.prior = res.x
-
-		new_price = np.sum(res.x * np.array([0.1, 0.5, 0.9]))
+		else:
+			print res.message
+		new_price = np.sum(self.prior * np.array([0.01, 0.5, 0.99]))
 		self.price_history.append(new_price)
 
 	def update_price(self, x):
@@ -363,14 +404,14 @@ class SimpleMarket(object):
 		self.prior = new_p[:]
 		new_price = np.sum(new_p * np.array([0.1, 0.5, 0.9]))
 
-#		if new_price > p and new_price - p >= 0.5 * self.tick:
-#			new_price = p + self.tick
-#		elif new_price < p and p - new_price >= 0.5 * self.tick:
-#			new_price = p - self.tick
-#		elif new_price > p and new_price - p < 0.5 * self.tick:
-#			new_price = p + self.tick
-#		elif new_price < p and p - new_price < 0.5 * self.tick:
-#			new_price = p - self.tick
+		if new_price > p and new_price - p >= 0.5 * self.tick:
+			new_price = p + self.tick
+		elif new_price < p and p - new_price >= 0.5 * self.tick:
+			new_price = p - self.tick
+		elif new_price > p and new_price - p < 0.5 * self.tick:
+			new_price = p + self.tick
+		elif new_price < p and p - new_price < 0.5 * self.tick:
+			new_price = p - self.tick
 
 		self.price_history.append(new_price)
 
@@ -393,12 +434,12 @@ class Simulation(object):
 		self.traders_sizes = [t.pop_size for t in self.all_traders]
 		for i, t in enumerate(range(num_trades)):
 			trade_incentives = [i.get_trade_incentive(self.util_func) for i in self.all_traders]
-			trade_probs = np.array(self.traders_sizes) * np.array(trade_incentives)
+			#trade_probs = np.array(self.traders_sizes) * np.array(trade_incentives)
+			trade_probs = np.array(self.traders_sizes)
 			self.trade_probs = trade_probs / np.sum(trade_probs)
 			cdf_vals = cdf(trade_probs)
 
 			trader = choice(self.all_traders, cdf_vals)
-			print trader.trader_name	
 			trader.create_trade()
 			self.update_all_traders()
 
