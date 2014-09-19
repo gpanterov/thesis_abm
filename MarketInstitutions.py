@@ -352,7 +352,7 @@ class TrendFollower(SimpleTrader):
 
 
 class SimpleMarket(object):
-	def __init__(self, price_history, max_price=0.95, min_price=0.05, tick=0.01):
+	def __init__(self, price_history, max_price=0.95, min_price=0.05, tick=0.001):
 		self.price_history = price_history[:]
 		self.inventory = 0
 		self.inventory_history = [0]
@@ -372,9 +372,10 @@ class SimpleMarket(object):
 		self.inventory_history.append(self.inventory)
 		self.update_timer +=1
 
-		if self.update_timer >= 1:
+		if self.update_timer >= 5:
 			#self.update_price_multiple_periods(10)
-			self.update_price(x)
+			self.update_price_inventory()
+			#self.update_price(x)
 			self.update_timer = 0
 		else:
 			self.price_history.append(self.get_last_price())
@@ -415,8 +416,22 @@ class SimpleMarket(object):
 
 		self.price_history.append(new_price)
 
-
-
+	def update_price_inventory(self):
+		p = self.get_last_price()
+		actual = -self.inventory_history[-1] + self.inventory_history[0]
+		n = len(self.inventory_history)
+		ratio = 1. * actual / n
+		if ratio >= 0.5:
+			new_price = p + 2*self.tick
+		elif ratio > 0.1 and ratio < 0.5:
+			new_price  = p + self.tick
+		elif ratio <= -0.5:
+			new_price = p - 2*self.tick
+		elif ratio < -0.1 and ratio > -0.5:
+			new_price = p - self.tick
+		else:
+			new_price = p
+		self.price_history.append(new_price)
 
 class Simulation(object):
 	def __init__(self, market, all_traders, util_func = exp_util):
