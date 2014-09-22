@@ -171,7 +171,7 @@ class NoiseTrader(BaseContinuousTrader):
 		self.trader_name = trader_name
 
 	def update_expectations(self):
-		if self.market.time % 5 == 0:
+		if self.market.time % 10 == 0:
 			self.u = np.random.normal(0, 0.1)
 		n = len(self.ar_params)
 		assert len(self.market.price_history) >= n + 1
