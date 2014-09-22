@@ -144,6 +144,7 @@ class IntelligentTrader(BaseContinuousTrader):
 		self.market = market
 		self.pop_size = pop_size
 		self.mu = mu
+		self.base_mu = mu
 		self.sig = sig
 		self.a = a
 
@@ -153,7 +154,8 @@ class IntelligentTrader(BaseContinuousTrader):
 
 
 		self.trader_name = trader_name
-
+	def update_expectations(self):
+		self.mu = self.base_mu #+ np.random.normal(0,0.01)
 
 class NoiseTrader(BaseContinuousTrader):
 	def __init__ (self, market, pop_size, ar_params, sig, a, trader_name):
@@ -169,10 +171,11 @@ class NoiseTrader(BaseContinuousTrader):
 		self.trader_name = trader_name
 
 	def update_expectations(self):
+		if self.market.time % 5 == 0:
+			self.u = np.random.normal(0, 0.1)
 		n = len(self.ar_params)
 		assert len(self.market.price_history) >= n + 1
 		P = np.array(self.market.price_history[-n - 1:])
 		R = np.log(P[1:]) - np.log(P[:-1])
-		r = np.sum(self.ar_params * R) + np.random.normal(0, 0.001)
-		self.mu = P[-1] * (1 + r)
-		self.mu = self.market.get_last_price()
+		r = np.sum(self.ar_params * R)
+		self.mu = P[-1] * (1 + r) + np.random.normal(0, 0.01) + self.u

@@ -13,12 +13,14 @@ def entropy(P):
 	P = np.array(P)
 	return - np.sum(P * np.log(P))
 
-def expected_size(P, market_prices, prob_noise, mu_noise, sig_noise, a_int, a_noise):
+def expected_size(P, market_prices, prob_noise, mu_noises, sig_noise, a_int, a_noise):
 	"""
 	The expected trade size give market parameters for noise and intelligent
 	traders
 	"""
 	market_prices = np.array(market_prices)
+	mu_noises = np.array(mu_noises)
+
 	mu_support = np.array([0.01, 0.5, 0.99])
 	sig_support = np.array([0.01, 0.1, 0.19])
 
@@ -28,13 +30,13 @@ def expected_size(P, market_prices, prob_noise, mu_noise, sig_noise, a_int, a_no
 
 	# Expected size for an intelligent and noise traders
 	size_int = (mu_int - market_prices) / (a_int * sig_int**2)
-	size_noise = (mu_noise - market_prices) / (a_noise * sig_noise**2)
+	size_noise = (mu_noises - market_prices) / (a_noise * sig_noise**2)
 	avg_size_per_period = prob_noise * size_noise + (1 - prob_noise) * size_int
 	
 	return np.mean(avg_size_per_period) 
 
 def MaxEnt_market_maker(market_prices, avg_sizes, 
-			prob_noise, mu_noise, sig_noise, a_int, a_noise, 
+			prob_noise, mu_noises, sig_noise, a_int, a_noise, 
 				Q = [0.33, 0.33, 0.34, 0.33, 0.33, 0.34]):
 	"""
 	Maximum entropy problem for the market maker
@@ -45,7 +47,7 @@ def MaxEnt_market_maker(market_prices, avg_sizes,
 	# COnstraints
 	cons = ({'type':'eq',
 	'fun':lambda x: expected_size(x, market_prices, 
-				prob_noise, mu_noise, sig_noise, a_int, a_noise) - np.mean(avg_sizes)},
+				prob_noise, mu_noises, sig_noise, a_int, a_noise) - np.mean(avg_sizes)},
 	{'type':'eq',
 	'fun':lambda x: np.sum(x[0:3]) - 1},
 	{'type':'eq',
@@ -76,6 +78,9 @@ class Market(object):
 		self.market_prices = [price_history[-1]]
 
 		self.prior = [0.33, 0.33, 0.34, 0.33,0.33,0.34]
+		self.mu_noises=[]
+
+
 	def get_last_price(self):
 		return self.price_history[-1]
 
@@ -92,20 +97,32 @@ class Market(object):
 		return self.get_last_price()
 
 	def update_price(self):
+		self.time += 1
 		p = self.get_last_price()
 		net_pos = np.sum(self.outstanding_trades)
 		self.inventory += - net_pos
 		avg_size = 1. * net_pos / len(self.outstanding_trades)
 		self.avg_sizes.append(avg_size)
-		avg_sizes = self.avg_sizes[-1:]
-		market_prices = self.market_prices[-1:]
-		#mu_noise = self.get_mu_noise()
+		self.mu_noises.append(self.get_mu_noise())
+		
+		n_back = 1
+		avg_sizes = self.avg_sizes[-n_back:]
+		market_prices = self.market_prices[-n_back:]
+		mu_noises = self.mu_noises[-n_back:]
+
 		res = MaxEnt_market_maker(market_prices, avg_sizes, 
 			self.prob_noise, self.mu_noise, 
 			self.sig_noise, self.a_int, self.a_noise, self.prior)
+		if not res.success:
+			print res.message
 		self.prior = res.x
 		mu_hat = np.sum(res.x[0:3] * np.array([0.01, 0.5, 0.99]))
 		sig_hat = np.sum(res.x[3:6] *  np.array([0.01, 0.1, 0.19]))
+		if mu_hat > p and mu_hat - p > 0.02:
+			mu_hat = p + 0.02
+		if mu_hat < p and p - mu_hat > 0.02:
+			mu_hat = p - 0.02
+
 		self.price_history.append(mu_hat)
 		self.market_prices.append(mu_hat)
 		self.outstanding_trades = []
