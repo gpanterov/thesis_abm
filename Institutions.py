@@ -2,111 +2,35 @@ import numpy as np
 from scipy.optimize import minimize
 
 
-def cross_ent(P, Q=[0.33,0.33,0.34]):
-	P = np.array(P)
-	Q = np.array(Q)
-	ce =  np.sum(P * np.log(P / Q))
 
-	return ce
-
-def entropy(P):
-	P = np.array(P)
-	return - np.sum(P * np.log(P))
-
-def expected_size(P, market_prices, avg_sizes, prob_noise, mu_noises, sig_int, sig_noise, a_int, a_noise):
-	"""
-	The expected trade size give market parameters for noise and intelligent
-	traders
-	"""
-
-	market_prices = np.array(market_prices)
-	mu_noises = np.array(mu_noises)
-	avg_sizes = np.array(avg_sizes)
-
-	mu_support = np.array([0.3, 0.5, 0.8])
-
-	mu_i = np.kron(mu_support, np.ones(len(market_prices)))
-	p = np.kron(np.ones(len(mu_support)), market_prices)
-	mu_n = np.kron(np.ones(len(mu_support)), mu_noises)
-	pi = np.kron(P, np.ones(len(market_prices)))
-	actual = np.kron(np.ones(len(mu_support)), avg_sizes)
-	# Expected size for an intelligent and noise traders
-	ES = (1 - prob_noise) * (mu_i - p) / (a_int * sig_int**2) + \
-			prob_noise * (mu_n - p) / (a_noise * sig_noise**2)
-	ES = np.sum((ES - actual)**2 * pi)
-	
-	return ES
-
-
-
-def ME_market(market_prices, avg_sizes, 
-			prob_noise, mu_noises, sig_int, sig_noise, a_int, a_noise):
-	"""
-	Maximum entropy problem for the market maker
-	"""
-
-	obj_func = lambda P: - entropy(P)
-
-	cons = ({'type':'eq',
-	'fun':lambda x: expected_size(x, market_prices, avg_sizes,
-				prob_noise, mu_noises, sig_int, sig_noise, a_int, a_noise)},
-	{'type':'eq',
-	'fun':lambda x: np.sum(x) - 1 },
-	)
-
-	# Optimization
-	P0 = [0.33, 0.33, 0.34]
-	res = minimize(obj_func, P0, method='SLSQP', constraints=cons)
-
-	return res
-
-def GME_market_maker(market_prices, avg_sizes, 
-			prob_noise, mu_noises, sig_noise, a_int, a_noise):
-	"""
-	GME Maximum entropy problem for the market maker
-	"""
-	esupport = np.array([-1e3, 0., 1e3])
-	moment_constraint1 = lambda x, z: expected_size(x, market_prices[-z], 
-				prob_noise, mu_noises[-z], sig_noise, a_int, a_noise) - avg_sizes[-z]
-
-	cons = ({'type':'eq',
-	'fun':lambda x: moment_constraint1(x,1) + np.sum(np.array(x[6:9]) * esupport)},
-	{'type':'eq',
-	'fun':lambda x: moment_constraint1(x,2) + np.sum(np.array(x[9:12]) * esupport)},
-	{'type':'eq',
-	'fun':lambda x: moment_constraint1(x,3) + np.sum(np.array(x[12:15]) * esupport)},
-	{'type':'eq',
-	'fun':lambda x: np.sum(x[0:3]) - 1},
-	{'type':'eq',
-	'fun':lambda x: np.sum(x[3:6]) - 1 },
-	{'type':'eq',
-	'fun':lambda x: np.sum(x[6:9]) - 1 },
-	{'type':'eq',
-	'fun':lambda x: np.sum(x[9:12]) - 1 },
-	{'type':'eq',
-	'fun':lambda x: np.sum(x[12:15]) - 1 },
-	)
-
-
-	obj_func = lambda P: - entropy(P[0:3]) - entropy(P[3:6]) \
-			 - entropy(P[6:9]) - entropy(P[9:12]) - entropy(P[12:15])
-
-#	obj_func = lambda P: cross_ent(P[0:3], Q[0:3]) + cross_ent(P[3:6], Q[3:6])
-	# COnstraints
-
-	# Optimization
-	P0 = [0.33, 0.33, 0.34, 0.33, 0.33, 0.34,0.33,0.33,0.34,0.33,0.33,0.34, 0.33,0.33,0.34]
-	res = minimize(obj_func, P0, method='SLSQP', constraints=cons)
-#	res = minimize(obj_func, P0, method='nelder-mead')
-
-	return res
-
-def ll_normal(x, mu, s):
+def normal_likelihood(x, mu, s):
 	"""
 	Loglikelihood of a normal distribution
 	"""
 	x = np.array(x)
-	return -0.5 * np.log(2 * np.pi) - np.log(s) - (x - mu)**2/(2*s**2)
+	return (1/((2 * np.pi)**0.5 * s)) * np.exp( - (x - mu)**2 / (2*s**2))
+
+def trade_ll(X, P, alpha, mu_i, mu_n, sig_int, sig_noise):
+	"""
+	Likelihood of a trade X occurring	
+	"""
+	X = np.array(X)
+	P = np.array(P)
+	mu_n = np.array(mu_n)
+
+	MU_i = (mu_i - P) / (1e-2*0.01)
+	s_i = ((1/(1e-2*0.01))**2 * sig_int)**0.5
+
+	MU_n = (mu_n - P) / (1e-2*0.01)
+
+	s_n = ((1/(1e-2*0.01))**2 * sig_noise)**0.5
+	L = alpha * normal_likelihood(X, MU_i, s_i) + (1-alpha)*normal_likelihood(X, MU_n, s_n)
+	return np.log(L)
+
+def max_ll(X, P, alpha, mu_n, sig_int, sig_noise):
+	obj_func = lambda mu_i: -np.sum(trade_ll(X, P, alpha, mu_i, mu_n, sig_int, sig_noise))	
+	res = minimize(obj_func, 0.5, method='nelder-mead')
+	return res
 
 class Market(object):
 	def __init__(self, price_history, prob_noise, sig_noise, a_int, a_noise):
