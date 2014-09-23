@@ -155,7 +155,7 @@ class IntelligentTrader(BaseContinuousTrader):
 
 		self.trader_name = trader_name
 	def update_expectations(self):
-		self.mu = self.base_mu #+ np.random.normal(0,0.01)
+		self.mu = self.base_mu + np.random.normal(0,0.01)
 
 class NoiseTrader(BaseContinuousTrader):
 	def __init__ (self, market, pop_size, ar_params, sig, a, trader_name):

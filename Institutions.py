@@ -13,65 +13,50 @@ def entropy(P):
 	P = np.array(P)
 	return - np.sum(P * np.log(P))
 
-def expected_size(P, market_price, prob_noise, mu_noise, sig_noise, a_int, a_noise):
+def expected_size(P, market_prices, avg_sizes, prob_noise, mu_noises, sig_int, sig_noise, a_int, a_noise):
 	"""
 	The expected trade size give market parameters for noise and intelligent
 	traders
 	"""
 
-	mu_support = np.array([0.01, 0.5, 0.99])
-	sig_support = np.array([0.01, 0.1, 0.19])
+	market_prices = np.array(market_prices)
+	mu_noises = np.array(mu_noises)
+	avg_sizes = np.array(avg_sizes)
 
-	# Calculate the mean and st dev for an intellgent trader
-	mu_int = np.sum(np.array(P[0:3]) * mu_support)
-	#sig_int = np.sum(np.array(P[3:6]) * sig_support)
-	sig_noise = np.sum(np.array(P[3:6]) * sig_support)
-	sig_int = 0.1
+	mu_support = np.array([0.3, 0.5, 0.8])
+
+	mu_i = np.kron(mu_support, np.ones(len(market_prices)))
+	p = np.kron(np.ones(len(mu_support)), market_prices)
+	mu_n = np.kron(np.ones(len(mu_support)), mu_noises)
+	pi = np.kron(P, np.ones(len(market_prices)))
+	actual = np.kron(np.ones(len(mu_support)), avg_sizes)
 	# Expected size for an intelligent and noise traders
-	size_int = (mu_int - market_price) / (a_int * sig_int**2)
-	size_noise = (mu_noise - market_price) / (a_noise * sig_noise**2)
-	avg_size_per_period = prob_noise * size_noise + (1 - prob_noise) * size_int
+	ES = (1 - prob_noise) * (mu_i - p) / (a_int * sig_int**2) + \
+			prob_noise * (mu_n - p) / (a_noise * sig_noise**2)
+	ES = np.sum((ES - actual)**2 * pi)
 	
-	return avg_size_per_period
+	return ES
 
-def create_constraints(market_prices, avg_sizes, 
-			prob_noise, mu_noises, sig_noise, a_int, a_noise):
 
-	moment_constraint1 = lambda x, z: expected_size(x, market_prices[-z], 
-				prob_noise, mu_noises[-z], sig_noise, a_int, a_noise) - avg_sizes[-z]
- 
-	cons = ({'type':'eq',
-	'fun':lambda x: moment_constraint1(x,1) },#+ moment_constraint1(x,2) + moment_constraint1(x,3)},
-	{'type':'eq',
-	'fun':lambda x: np.sum(x[0:3]) - 1},
-	{'type':'eq',
-	'fun':lambda x: np.sum(x[3:]) - 1 },)
-	return cons
 
-def MaxEnt_market_maker(market_prices, avg_sizes, 
-			prob_noise, mu_noises, sig_noise, a_int, a_noise, 
-				Q = [0.33, 0.33, 0.34, 0.33, 0.33, 0.34]):
+def ME_market(market_prices, avg_sizes, 
+			prob_noise, mu_noises, sig_int, sig_noise, a_int, a_noise):
 	"""
 	Maximum entropy problem for the market maker
 	"""
 
-	moment_constraint1 = lambda x, z: expected_size(x, market_prices[-z], 
-				prob_noise, mu_noises[-z], sig_noise, a_int, a_noise) - avg_sizes[-z]
-#	obj_func = lambda P: - entropy(P[0:3]) - entropy(P[3:6]) + \
-#					 (1-np.sum(P[0:3]))**2 * 1e5 + (1-np.sum(P[3:]))**2 * 1e5  \
-#					 + moment_constraint1(P,1) **2 * 1e3 + moment_constraint1(P,2)**2 * 1e3
+	obj_func = lambda P: - entropy(P)
 
+	cons = ({'type':'eq',
+	'fun':lambda x: expected_size(x, market_prices, avg_sizes,
+				prob_noise, mu_noises, sig_int, sig_noise, a_int, a_noise)},
+	{'type':'eq',
+	'fun':lambda x: np.sum(x) - 1 },
+	)
 
-	obj_func = lambda P: - entropy(P[0:3]) - entropy(P[3:6])
-#	obj_func = lambda P: cross_ent(P[0:3], Q[0:3]) + cross_ent(P[3:6], Q[3:6])
-	# COnstraints
-
-	cons = create_constraints(market_prices, avg_sizes, prob_noise, mu_noises,
-				sig_noise, a_int, a_noise)
 	# Optimization
-	P0 = [0.33, 0.33, 0.34, 0.33, 0.33, 0.34]
+	P0 = [0.33, 0.33, 0.34]
 	res = minimize(obj_func, P0, method='SLSQP', constraints=cons)
-#	res = minimize(obj_func, P0, method='nelder-mead')
 
 	return res
 
@@ -115,6 +100,13 @@ def GME_market_maker(market_prices, avg_sizes,
 #	res = minimize(obj_func, P0, method='nelder-mead')
 
 	return res
+
+def ll_normal(x, mu, s):
+	"""
+	Loglikelihood of a normal distribution
+	"""
+	x = np.array(x)
+	return -0.5 * np.log(2 * np.pi) - np.log(s) - (x - mu)**2/(2*s**2)
 
 class Market(object):
 	def __init__(self, price_history, prob_noise, sig_noise, a_int, a_noise):
