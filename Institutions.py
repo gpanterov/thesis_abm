@@ -41,7 +41,7 @@ def create_constraints(market_prices, avg_sizes,
 				prob_noise, mu_noises[-z], sig_noise, a_int, a_noise) - avg_sizes[-z]
  
 	cons = ({'type':'eq',
-	'fun':lambda x: moment_constraint1(x,1)},
+	'fun':lambda x: moment_constraint1(x,1) + moment_constraint1(x,2) + moment_constraint1(x,3)},
 	{'type':'eq',
 	'fun':lambda x: np.sum(x[0:3]) - 1},
 	{'type':'eq',
@@ -76,12 +76,11 @@ def MaxEnt_market_maker(market_prices, avg_sizes,
 	return res
 
 def GME_market_maker(market_prices, avg_sizes, 
-			prob_noise, mu_noises, sig_noise, a_int, a_noise, 
-				Q = [0.33, 0.33, 0.34, 0.33, 0.33, 0.34]):
+			prob_noise, mu_noises, sig_noise, a_int, a_noise):
 	"""
-	Maximum entropy problem for the market maker
+	GME Maximum entropy problem for the market maker
 	"""
-	esupport = np.array([-5e2, 0., 5e2])
+	esupport = np.array([-1e3, 0., 1e3])
 	moment_constraint1 = lambda x, z: expected_size(x, market_prices[-z], 
 				prob_noise, mu_noises[-z], sig_noise, a_int, a_noise) - avg_sizes[-z]
 
@@ -90,6 +89,8 @@ def GME_market_maker(market_prices, avg_sizes,
 	{'type':'eq',
 	'fun':lambda x: moment_constraint1(x,2) + np.sum(np.array(x[9:12]) * esupport)},
 	{'type':'eq',
+	'fun':lambda x: moment_constraint1(x,3) + np.sum(np.array(x[12:15]) * esupport)},
+	{'type':'eq',
 	'fun':lambda x: np.sum(x[0:3]) - 1},
 	{'type':'eq',
 	'fun':lambda x: np.sum(x[3:6]) - 1 },
@@ -97,15 +98,19 @@ def GME_market_maker(market_prices, avg_sizes,
 	'fun':lambda x: np.sum(x[6:9]) - 1 },
 	{'type':'eq',
 	'fun':lambda x: np.sum(x[9:12]) - 1 },
+	{'type':'eq',
+	'fun':lambda x: np.sum(x[12:15]) - 1 },
 	)
 
 
-	obj_func = lambda P: - entropy(P[0:3]) - entropy(P[3:6]) - entropy(P[6:9]) - entropy(P[9:12])
+	obj_func = lambda P: - entropy(P[0:3]) - entropy(P[3:6]) \
+			 - entropy(P[6:9]) - entropy(P[9:12]) - entropy(P[12:15])
+
 #	obj_func = lambda P: cross_ent(P[0:3], Q[0:3]) + cross_ent(P[3:6], Q[3:6])
 	# COnstraints
 
 	# Optimization
-	P0 = [0.33, 0.33, 0.34, 0.33, 0.33, 0.34,0.33,0.33,0.34,0.33,0.33,0.34]
+	P0 = [0.33, 0.33, 0.34, 0.33, 0.33, 0.34,0.33,0.33,0.34,0.33,0.33,0.34, 0.33,0.33,0.34]
 	res = minimize(obj_func, P0, method='SLSQP', constraints=cons)
 #	res = minimize(obj_func, P0, method='nelder-mead')
 
