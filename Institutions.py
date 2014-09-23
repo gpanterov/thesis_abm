@@ -41,7 +41,7 @@ def create_constraints(market_prices, avg_sizes,
 				prob_noise, mu_noises[-z], sig_noise, a_int, a_noise) - avg_sizes[-z]
  
 	cons = ({'type':'eq',
-	'fun':lambda x: moment_constraint1(x,1) + moment_constraint1(x,2) + moment_constraint1(x,3)},
+	'fun':lambda x: moment_constraint1(x,1) },#+ moment_constraint1(x,2) + moment_constraint1(x,3)},
 	{'type':'eq',
 	'fun':lambda x: np.sum(x[0:3]) - 1},
 	{'type':'eq',
