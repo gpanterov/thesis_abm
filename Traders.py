@@ -172,10 +172,10 @@ class NoiseTrader(BaseContinuousTrader):
 
 	def update_expectations(self):
 		if self.market.time % 10 == 0:
-			self.u = np.random.normal(0, 0.1)
+			self.u = 0
 		n = len(self.ar_params)
 		assert len(self.market.price_history) >= n + 1
 		P = np.array(self.market.price_history[-n - 1:])
 		R = np.log(P[1:]) - np.log(P[:-1])
 		r = np.sum(self.ar_params * R)
-		self.mu = P[-1] * (1 + r) + np.random.normal(0, 0.01) + self.u
+		self.mu = P[-1] * (1 + r) #+ np.random.normal(0, 0.01) + self.u
