@@ -27,10 +27,11 @@ def trade_ll(X, P, alpha, mu_i, mu_n, sig_int, sig_noise):
 	L = alpha * normal_likelihood(X, MU_i, s_i) + (1-alpha)*normal_likelihood(X, MU_n, s_n)
 	return np.log(L)
 
-def max_ll(X, P, alpha, mu_n, sig_int, sig_noise):
-	obj_func = lambda mu_i: -np.sum(trade_ll(X, P, alpha, mu_i, mu_n, sig_int, sig_noise))	
-	res = minimize(obj_func, 0.5, method='nelder-mead')
+def max_ll(X, P, mu_n, sig_int, sig_noise):
+	obj_func = lambda params: -np.sum(trade_ll(X, P, params[1], params[0], mu_n, sig_int, sig_noise))	
+	res = minimize(obj_func, [0.5,0.5], method='nelder-mead')
 	return res
+
 
 class Market(object):
 	def __init__(self, price_history, prob_noise, sig_noise, a_int, a_noise):

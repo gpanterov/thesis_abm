@@ -45,14 +45,11 @@ def choice(population, cdf_vals):
 	return population[idx]
 
 
-def log_util(trade_type, P, prob,  X=1., v1=1., v2=0.):
-	if trade_type == "buy":
-		return prob * np.log(X + v1 - P) + (1 - prob) * np.log(X + v2 - P)
-	elif trade_type == "sell":
-		return prob * np.log(X + P - v1) + (1 - prob) * np.log(X + P - v2)
-	else:
-		return np.log(X)
 
+
+
+
+ 
 def exp_util(trade_type, P, prob, a=1e-2, X=1., v1=1., v2=0.):
 	if trade_type == "buy":
 		return prob * ( 1 - np.exp(- a * (X + v1 - P))) + \
@@ -380,18 +377,6 @@ class SimpleMarket(object):
 		else:
 			self.price_history.append(self.get_last_price())
 
-	def update_price_multiple_periods(self, N):
-		p = self.get_last_price()
-		self.New_Prices.append(p)
-		actual = -self.inventory_history[-1] + self.inventory_history[-N-1]
-		res = max_ent_v2(p, self.prior, 0.8, actual, N)
-		#res = max_ent_multi(p, self.New_Prices, [0.33,0.33,0.34], 0.8, actual, N)
-		if res.success:
-			self.prior = res.x
-		else:
-			print res.message
-		new_price = np.sum(self.prior * np.array([0.01, 0.5, 0.99]))
-		self.price_history.append(new_price)
 
 	def update_price(self, x):
 		p = self.get_last_price()
