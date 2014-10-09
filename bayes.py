@@ -49,6 +49,7 @@ class BayesDiscrete(object):
 	def calculate_posterior(self, trade, prior, p, mu_n, alpha):
 		Ns = len(prior)
 		s = np.linspace(0, 1, Ns)
+		s = np.round(s,2)
 		self.support = s
 		if trade == 1:
 			posterior = self.calculate_likelihood_buy(p, s, mu_n, alpha) * prior

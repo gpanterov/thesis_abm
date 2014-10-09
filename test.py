@@ -58,4 +58,6 @@ for i in range(ntrades):
 
 
 
-
+for i in range(100):
+	prior=b.calculate_posterior(1, prior, price_history[-1], mu_n_mm, alpha_mm)
+	
