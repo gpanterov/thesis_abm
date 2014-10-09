@@ -34,9 +34,9 @@ class BayesNormal(object):
 
 class BayesDiscrete(object):
 
-	sig_ei = 0.01
-	sig_en = 0.01
-
+	def __init__ (self, sig_ei, sig_en):
+		self.sig_ei = sig_ei
+		self.sig_en = sig_en	
 	def calculate_likelihood_buy(self, p, mu_i, mu_n, alpha):
 		# calculate likelihood of a buy given the parameters
 		return alpha * (1 - norm.cdf(p, mu_i, self.sig_ei)) + \
