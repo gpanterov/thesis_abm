@@ -34,6 +34,7 @@ prior = bayes.compute_uniform_prior(100)
 p = [0.5]
 ntrades = 200
 trades = []
+entropies=[]
 for i in range(ntrades):
 	if p[i] > 0.6:
 		mu_n = 0.3
@@ -41,6 +42,8 @@ for i in range(ntrades):
 		mu_n = 0.7
 	else:
 		mu_n = p[i]
+	if i > 50:
+		mu_i = 0.5
 	if np.random.uniform() <alpha:
 		prob_buy = (1 - norm.cdf(p[i], mu_i, 0.01)) 
 	else:
@@ -50,6 +53,7 @@ for i in range(ntrades):
 	trades.append(trade)
 	prior = b.calculate_posterior(trades[i], prior, p[i], p[i], alpha_hat)
 	p.append(np.sum(prior * b.support))
+	entropies.append(np.sum(-prior*np.log2(prior + 1e-5)))
 
 
 
