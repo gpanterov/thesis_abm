@@ -51,6 +51,8 @@ for shock1 in shocks:
 
 models = pd.DataFrame(models)
 sorted_models = models.sort(column=[models.columns[-2], models.columns[-1]])
+sorted_models['rank'] = range(len(models))
+
 print true_params
 print "--" * 20
 print sorted_models

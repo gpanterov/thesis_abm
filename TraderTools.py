@@ -174,7 +174,7 @@ def day_trade(P, num_trades, mu_i, prior, price_history, Records):
 		# Market maker updates prices
 		mu_i_mm, prior = MM_update(P, trade, prior, price_history)
 
-		if i%2==0 and i > 1:
+		if i%4==0 and i > 1:
 			if mu_i_mm > price_history[-1]:
 				new_price = min(price_history[-1] + 3*P.tick, mu_i_mm)
 			else:
@@ -214,6 +214,13 @@ def simulate(P, num_sim, num_days, num_trades):
 		SimRet[i] = Records.daily_return 
 		SimVol[i] = Records.daily_volatility
 	return SimRet, SimVol
+
+def trade_multi_days(P, num_days, num_trades, prior, price_history):
+	Records = tools.SimulationRecords()
+	for day in range(num_days):
+		mu_i = mu_i + P.shocks_i[day]
+		prior, price_history = tools.day_trade(P, num_trades, mu_i, prior, price_history, Records)
+	return prior, price_history
 
 def fit(BaseRet, BaseVol, SimRet, SimVol):
 	""" Estimates the goodness of fit of the simulation """
