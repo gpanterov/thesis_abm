@@ -12,7 +12,7 @@ class SimulationParams(object):
 	##############
 
 	# probability of informed trading
-	alpha = 0.9
+	alpha = 0.6
 
 	# Price tick
 	tick = 0.01
@@ -43,7 +43,9 @@ class SimulationParams(object):
 
 		# price history
 		self.price_history = price_history
+		self.initialize()
 
+	def initialize(self):
 		self.init_IT()
 		self.init_NT()
 		self.init_MM()
@@ -216,11 +218,11 @@ def simulate(P, num_sim, num_days, num_trades):
 def fit(BaseRet, BaseVol, SimRet, SimVol):
 	""" Estimates the goodness of fit of the simulation """
 
-	mad_ret = np.abs(SimRet.sub(BaseRet, axis=0))
-	mad_ret = mad_ret.mean(axis=0)
+	mad_ret = np.abs(SimRet.values - BaseRet.values)
+	mad_ret = np.mean(mad_ret, axis=0)
 
-	mad_vol = np.abs(SimVol.sub(BaseVol, axis=0))
-	mad_vol = mad_vol.mean(axis=0)
+	mad_vol = np.abs(SimVol.values - BaseVol.values)
+	mad_vol = np.mean(mad_vol, axis=0)
 	num_sim = len(SimRet.columns)
 	Res = pd.DataFrame(index=range(num_sim), columns=['mad_ret', 'mad_vol'])
 	Res['mad_vol'] = mad_vol
