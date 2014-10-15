@@ -5,7 +5,7 @@ import pandas as pd
 ##############
 # Parameters #
 ##############
-p = 50.  # starting price
+p = 47.  # starting price
 
 # Noise Trader
 Sigma_u = 10 ** 2 # Variance of noise trader order flow
