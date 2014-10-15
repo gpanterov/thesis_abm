@@ -12,7 +12,7 @@ class SimulationParams(object):
 	##############
 
 	# probability of informed trading
-	alpha = 0.6
+	alpha = 0.3
 
 	# Price tick
 	tick = 0.01
@@ -174,14 +174,14 @@ def day_trade(P, num_trades, mu_i, prior, price_history, Records):
 		# Market maker updates prices
 		mu_i_mm, prior = MM_update(P, trade, prior, price_history)
 
-		if i%4==0 and i > 1:
-			if mu_i_mm > price_history[-1]:
-				new_price = min(price_history[-1] + 3*P.tick, mu_i_mm)
-			else:
-				new_price = max(price_history[-1] - 3*P.tick, mu_i_mm)
-			new_price = np.round(new_price, 2)
-			price_history.append(new_price)
-			daily_prices.append(new_price)
+		#if i%4==0 and i > 1:
+		if mu_i_mm > price_history[-1]:
+			new_price = min(price_history[-1] + 3*P.tick, mu_i_mm)
+		else:
+			new_price = max(price_history[-1] - 3*P.tick, mu_i_mm)
+		new_price = np.round(new_price, 2)
+		price_history.append(new_price)
+		daily_prices.append(new_price)
 
 		# Keep recod
 		Records.mu_i.append(mu_i)
@@ -215,12 +215,25 @@ def simulate(P, num_sim, num_days, num_trades):
 		SimVol[i] = Records.daily_volatility
 	return SimRet, SimVol
 
-def trade_multi_days(P, num_days, num_trades, prior, price_history):
-	Records = tools.SimulationRecords()
+def simulate2(P, num_sim, num_days, num_trades):
+	""" Uses the entire price series for fit"""
+	n_obs = num_days * num_trades + len(P.price_history)
+	SimRet = pd.DataFrame(index = range(n_obs), columns = range(num_sim))
+	for i in range(num_sim):
+		prior = P.prior[:]
+		price_history = P.price_history[:]
+		mu_i = P.mu_i
+		prior, price_history, Records = trade_multi_days(P, 
+			num_days, num_trades, prior, price_history, mu_i)
+		SimRet[i] = price_history
+	return SimRet
+
+def trade_multi_days(P, num_days, num_trades, prior, price_history, mu_i):
+	Records = SimulationRecords()
 	for day in range(num_days):
 		mu_i = mu_i + P.shocks_i[day]
-		prior, price_history = tools.day_trade(P, num_trades, mu_i, prior, price_history, Records)
-	return prior, price_history
+		prior, price_history = day_trade(P, num_trades, mu_i, prior, price_history, Records)
+	return prior, price_history, Records
 
 def fit(BaseRet, BaseVol, SimRet, SimVol):
 	""" Estimates the goodness of fit of the simulation """
