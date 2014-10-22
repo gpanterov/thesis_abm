@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
+import matplotlib.pyplot as plt
 
 ############################################################################
 #################### Data Generation #######################################
@@ -11,7 +12,7 @@ class default_params(object):
 
 	# Market Maker
 	Lambda = 0.5  
-	phi = -0.2
+	phi = 0.
 	y_bar = 10.
 	I_bar = 10.
 
@@ -106,40 +107,123 @@ def simple_likelihood(price_history, Inventory, P_OWN, params):
 	return LN_F 
 
 
+def likelihood_ratio(old_price, new_price, shock_time, lfunc,
+							price_history, Inventory, params):
+	N = len(price_history)
+	P1 = np.ones(N) * old_price
+	P2 = np.concatenate((np.ones(shock_time)* old_price, 
+							np.ones(N - shock_time)*new_price))
+
+	assert len(P1) == len(P2)
+	P1 = P1[1:]
+	P2 = P2[1:]
+
+	L1 = lfunc(price_history, Inventory, P1, params)
+	L2 = lfunc(price_history, Inventory, P2, params)
+	# see http://en.wikipedia.org/wiki/Likelihood-ratio_test
+	D = 2 * (np.sum(L1) - np.sum(L2))
+	return D
+
+def normal_log_density(x, mu, sig):
+	return -np.log(sig) - 0.5 * np.log(2*np.pi) - (x - mu) **2 / (2*sig**2)
 
 class SimpleLikelihood(object):
-	def __init__(self, price_history, Inventory, lfunc, num_trades, p_durations, params_class):
+	def __init__(self, price_history, Inventory, lfunc, num_trades, params_class):
 		self.price_history = np.array(price_history)
 		self.Inv = np.array(Inventory)
 		self.params_class = params_class
 		self.lfunc = lfunc
 		self.num_trades = num_trades
-		self.p_durations = p_durations
 
 	def obj_func(self, x):
-
+		num_prices = len(self.p_durations) + 1
 		# Instantiate a parameter class
 		_params = self.params_class()
-		# Enter the values for endog. variables
-		#_params.Lambda = x[0]
-		#_params.phi = x[1]
-		#_params.Sigma_u = x[2]
 
+		# Enter the values for endog. variables
 		_params.Lambda=x[0]
 		_params.phi = x[1]
-		p_own = x[2:]
+		_params.Sigma_u = x[2]
+		_params.Sigma_0 = x[3]
+		p_own = x[-num_prices:]
 		P_OWN = create_price_vector(p_own, self.p_durations, self.num_trades)
 		res = self.lfunc(self.price_history, self.Inv, P_OWN, _params)
-		return -np.sum(res) 
+		prior_Sigmau = normal_log_density(x[2], 100, 10)
+		#prior_Lambda = normal_log_density(x[0], -0.08, 0.9)
+		prior_prices = normal_log_density(np.mean(p_own), 40, 5)
+		prior_phi = normal_log_density(x[1], 0., 0.001)
+		return -np.sum(res +  prior_phi + prior_Sigmau + prior_prices) 
 
 	def optimize(self):
 
-		p0 = [50, 50]
-		x0 = [0.2, -0.1] + p0 
+		p0 = [50] * (len(self.p_durations) + 1)
+		x0 = [0.2, -0.1, 70, 20] + p0 
 
 		res = minimize(self.obj_func, x0, method='nelder-mead',
 			options={'xtol':1e-8, 'disp':True, 'maxfev':5000, 'maxiter':5000} )
 		return res
 
+	def optimize_all(self):
+		self.best_fun = np.inf
+		self.best_duration = 0
+		self.best_res = 0
+		for i in range(50, 500, 100):
+			for j in range(50, 500, 100):
+				self.p_durations = [i, j]
+				res = self.optimize()
+				if res.fun < self.best_fun:
+					self.best_fun = res.fun
+					self.best_duration = [i, j]
+					self.best_res = res
+		return self.best_res
+
+	def optimize_all_set(self):
+		sampling_freq=5
+		ret = np.array(self.price_history[1:]) - np.array(self.price_history[:-1])
+		N = len(ret)
+		ret_re = resample_series(ret, sampling_freq)
+		ret_re = np.abs(ret_re)
+		n = len(ret_re)
+		# Split the data into 3 sub-periods. For each subperiod identify the biggest
+		# change. The time of the biggest change will be a candidate for a price_shock
+
+		slicer = np.round(np.linspace(0, n, 4))
+
+		ret1 = ret_re[0 : slicer[1]]
+		ret2 = ret_re[slicer[1] : slicer[2]]
+		ret3 = ret_re[slicer[2] :]
+
+		indx1 = np.argsort(ret1)
+		indx2 = np.argsort(ret2)
+		indx3 = np.argsort(ret3)
+		p_shocks = [indx1[-1], indx2[-1] + slicer[1], indx3[-1] + slicer[2]]
+		p_shocks = np.sort(p_shocks)
+		p_shocks *= 1. * sampling_freq
+		assert p_shocks[-1] <= N
+
+		self.p_durations = p_shocks - np.concatenate(([0],p_shocks[:-1]))
+		res=self.optimize()
+		return res
+def plot(sampling_freq, price_history, X, U, Y):
+	Vol = np.abs(X) + np.abs(U)
+
+	prices = resample_series(price_history, sampling_freq)
+	volume = resample_series(Vol, sampling_freq)
+	oflow = resample_series(Y, sampling_freq)
+	 
+	fig = plt.figure()
+	ax1 = fig.add_subplot(3,1,1)
+	ax1.plot(prices)
+	ax1.set_title("Price History")
+
+	ax2 = fig.add_subplot(3,1,2)
+	ax2.set_title("Volume")
+	ax2.plot(volume)
+
+	ax3 = fig.add_subplot(3,1,3)
+	ax3.set_title("Net order flow")
+	ax3.plot(oflow)
+
+	plt.show()
 
 
