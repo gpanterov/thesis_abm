@@ -11,13 +11,21 @@ class params_class(tools.default_params):
 params = params_class()
 
 p_start = 40.
-num_trades = 250
-informed_prices = [37., 41., 38.] * 2
-price_history, Inv, X, U, Y = tools.raw_data(informed_prices, 
+num_trades = 300
+informed_prices = [37., 42.,] 
+price_durations = [200.]
+price_history, Inv, X, U, Y = tools.raw_data(informed_prices, price_durations,
 										p_start, num_trades, params)
 
-lfunc = tools.moments_likelihood
-model = tools.SimpleLikelihood(price_history, Inv, 
-					lfunc, num_trades, params_class)
-res = model.optimize()
-
+best_fun = np.inf
+best_duration = 0
+best_res = 0
+for i in range(50, 250, 32):
+	model = tools.SimpleLikelihood(price_history, Inv, tools.simple_likelihood, 
+							num_trades, [i], params_class)
+	res = model.optimize()
+	print res.x
+	if res.fun < best_fun:
+		best_fun = res.fun
+		best_duration = i
+		best_res = res
