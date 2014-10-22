@@ -73,7 +73,7 @@ def resample_series(series, sampling_freq=5):
 	series = pd.Series(series)	
 	freq = series.index / sampling_freq
 	series = series.groupby([freq]).mean()
-	return series
+	return series.values
 
 
 def simple_likelihood(price_history, Inventory, p_own, params):
@@ -126,29 +126,63 @@ def moments_likelihood(price_history, Inventory, p_own, params):
 		(MU_delta - MU_Dbar)**2 / (2 * Sigma_Dbar)  
 	return LN_F 
 
+def sim_likelihood(price_history, Inventory, p_own, params, num_sim=100, er=0.5):
+	""" Likelihood (sim) of observing a certain price *moments* """
+	P_LAST = np.array(price_history[:-1])
+	P = np.array(price_history[1:])
+	DELTA_P = P - P_LAST
+
+	N = len(DELTA_P) # number of observations (new prices)
+	num_trades = N / len(p_own)
+	assert N % len(p_own) == 0	
+
+	target = resample_series(P, sampling_freq = num_trades)
+	T = 1. * num_trades
+	indx_start_price = np.arange(0, len(price_history), num_trades)[:-1]
+	start_prices = np.array(price_history)[indx_start_price]
+	L = []
+	for i, p_start in enumerate(start_prices):
+		num_success = 0
+		for _ in range(num_sim):
+			informed_prices = [p_own[i]]
+			price_history_sim, Inv, X, U, Y = raw_data(informed_prices, 
+											p_start, num_trades, params)
+			sim_mean = np.mean(price_history_sim)
+			if (target[i] < sim_mean + er) and (target[i] > sim_mean - er):
+				num_success += 1
+		L.append(num_success*1. / num_sim)
+	return L
+
 class SimpleLikelihood(object):
-	def __init__(self, price_history, Inventory, lfunc, params_class):
+	def __init__(self, price_history, Inventory, lfunc, num_trades, params_class):
 		self.price_history = np.array(price_history)
 		self.Inv = np.array(Inventory)
 		self.params_class = params_class
 		self.lfunc = lfunc
+		self.num_trades = num_trades
 
 	def obj_func(self, x):
+
+		num_periods = len(self.price_history[1:]) / self.num_trades
 		# Instantiate a parameter class
 		_params = self.params_class()
 		# Enter the values for endog. variables
 		#_params.Lambda = x[0]
 		#_params.phi = x[1]
 		#_params.Sigma_u = x[2]
+
+		#_params.Lambda=x[0]
 		_params.phi = x[0]
-		p_own = x[1:]
+		p_own = x[-num_periods:]
 		#p_own = np.concatenate((p_own, [37., 41., 38.]))
 		res = self.lfunc(self.price_history, self.Inv, p_own, _params)
 		return -np.sum(res) 
 
 	def optimize(self):
-		#x0 = [0.3,-0.1] + [50, 50, 50] * 2
-		x0 = [-0.1] + [50, 50, 50] * 3
+		num_periods = len(self.price_history[1:]) / self.num_trades
+
+		p0 = [50] * num_periods
+		x0 = [-0.1] + p0
 
 		res = minimize(self.obj_func, x0, method='nelder-mead',
 			options={'xtol':1e-8, 'disp':True, 'maxfev':5000, 'maxiter':5000} )
