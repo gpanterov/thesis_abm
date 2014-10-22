@@ -55,9 +55,9 @@ def raw_data(informed_prices, p_start, num_trades, params):
 			u_t = np.random.normal(0, params.Sigma_u**0.5)
 			x_t = compute_xstar(p_last, p, params)
 			I_last = Inv[-1]
+			I_new = I_last - (x_t + u_t)
 			p_new = p_last + mm_price_change(x_t, u_t, I_last, params)
 			price_history.append(p_new)
-			I_new = I_last - (x_t + u_t)
 			Inv.append(I_new)
 			X.append(x_t)
 			U.append(u_t)
@@ -68,6 +68,13 @@ def raw_data(informed_prices, p_start, num_trades, params):
 ###############################################################################
 ############################ Estimation #######################################
 ###############################################################################
+def resample_series(series, sampling_freq=5):
+	series = np.array(series)
+	series = pd.Series(series)	
+	freq = series.index / sampling_freq
+	series = series.groupby([freq]).mean()
+	return series
+
 
 def simple_likelihood(price_history, Inventory, p_own, params):
 	""" Likelihood of observing a certain price series """
@@ -89,26 +96,60 @@ def simple_likelihood(price_history, Inventory, p_own, params):
 		(DELTA_P - MU_DP)**2 / (2 * Sigma_dp)  
 	return LN_F 
 
+def moments_likelihood(price_history, Inventory, p_own, params):
+	""" Likelihood of observing a certain price *moments* """
+	P_LAST = np.array(price_history[:-1])
+	P = np.array(price_history[1:])
+	DELTA_P = P - P_LAST
+
+	INV_LAST = np.array(Inventory[:-1])
+	N = len(DELTA_P) # number of observations (new prices)
+	num_trades = N / len(p_own)
+	assert N % len(p_own) == 0	
+
+	T = 1. * num_trades
+
+	MU_delta = resample_series(DELTA_P, sampling_freq=num_trades)
+	MU_plast = resample_series(P_LAST, sampling_freq=num_trades)
+	MU_Ilast = resample_series(INV_LAST, sampling_freq=num_trades)
+
+	Sigma_MM = (params.Lambda / params.y_bar)**2 * params.Sigma_u
+	_xstar = (p_own - MU_plast) / ((2 * params.Lambda / params.y_bar) + \
+			params.alpha * (params.Sigma_0 + Sigma_MM))
+
+	MU_Dbar = (params.Lambda / params.y_bar) * _xstar + \
+						params.phi * MU_Ilast / params.I_bar
+
+	Sigma_Dbar = (params.Lambda / params.y_bar)**2 * params.Sigma_u / T
+
+	LN_F = -0.5 * np.log(2*np.pi) - np.log(Sigma_Dbar**0.5) - \
+		(MU_delta - MU_Dbar)**2 / (2 * Sigma_Dbar)  
+	return LN_F 
+
 class SimpleLikelihood(object):
-	def __init__(self, price_history, Inventory, params_class):
+	def __init__(self, price_history, Inventory, lfunc, params_class):
 		self.price_history = np.array(price_history)
 		self.Inv = np.array(Inventory)
 		self.params_class = params_class
+		self.lfunc = lfunc
 
 	def obj_func(self, x):
 		# Instantiate a parameter class
 		_params = self.params_class()
 		# Enter the values for endog. variables
-		_params.Lambda = x[0]
-		_params.phi = x[1]
-		_params.Sigma_u = x[2]
-		p_own = x[3:]
-	
-		res = simple_likelihood(self.price_history, self.Inv, p_own, _params)
+		#_params.Lambda = x[0]
+		#_params.phi = x[1]
+		#_params.Sigma_u = x[2]
+		_params.phi = x[0]
+		p_own = x[1:]
+		#p_own = np.concatenate((p_own, [37., 41., 38.]))
+		res = self.lfunc(self.price_history, self.Inv, p_own, _params)
 		return -np.sum(res) 
 
 	def optimize(self):
-		x0 = [0.3,-0.1, 50, 50, 50, 50]
+		#x0 = [0.3,-0.1] + [50, 50, 50] * 2
+		x0 = [-0.1] + [50, 50, 50] * 3
+
 		res = minimize(self.obj_func, x0, method='nelder-mead',
 			options={'xtol':1e-8, 'disp':True, 'maxfev':5000, 'maxiter':5000} )
 		return res
