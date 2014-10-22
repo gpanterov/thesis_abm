@@ -36,5 +36,5 @@ price_history2, Inv2, X, U, Y = tools.raw_data(informed_prices, price_durations,
 plt.plot(price_history2)
 plt.show()
 
-D = tools.likelihood_ratio(37., 42., 120, tools.simple_likelihood,
+D = tools.likelihood_ratio(37., 50., 120, tools.simple_likelihood,
 							price_history[:150],Inv[:150], params)

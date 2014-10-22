@@ -148,11 +148,17 @@ class SimpleLikelihood(object):
 		p_own = x[-num_prices:]
 		P_OWN = create_price_vector(p_own, self.p_durations, self.num_trades)
 		res = self.lfunc(self.price_history, self.Inv, P_OWN, _params)
-		prior_Sigmau = normal_log_density(x[2], 100, 10)
-		#prior_Lambda = normal_log_density(x[0], -0.08, 0.9)
-		prior_prices = normal_log_density(np.mean(p_own), 40, 5)
+		#prior_Sigmau = normal_log_density(x[2], 10, 2)
+		prior_Sigmau = 0
+
+		prior_Lambda = normal_log_density(x[0], 1., 0.3)
+		prior_prices = normal_log_density(np.mean(p_own), 78, 2)
+		prior_prices2 = normal_log_density(np.std(p_own), 0., 0.2)
 		prior_phi = normal_log_density(x[1], 0., 0.001)
-		return -np.sum(res +  prior_phi + prior_Sigmau + prior_prices) 
+
+		all_priors = prior_Lambda + prior_phi + prior_Sigmau + \
+					prior_prices + prior_prices2 	
+		return -np.sum(res + all_priors ) 
 
 	def optimize(self):
 
@@ -163,19 +169,6 @@ class SimpleLikelihood(object):
 			options={'xtol':1e-8, 'disp':True, 'maxfev':5000, 'maxiter':5000} )
 		return res
 
-	def optimize_all(self):
-		self.best_fun = np.inf
-		self.best_duration = 0
-		self.best_res = 0
-		for i in range(50, 500, 100):
-			for j in range(50, 500, 100):
-				self.p_durations = [i, j]
-				res = self.optimize()
-				if res.fun < self.best_fun:
-					self.best_fun = res.fun
-					self.best_duration = [i, j]
-					self.best_res = res
-		return self.best_res
 
 	def optimize_all_set(self):
 		sampling_freq=5
@@ -204,6 +197,8 @@ class SimpleLikelihood(object):
 		self.p_durations = p_shocks - np.concatenate(([0],p_shocks[:-1]))
 		res=self.optimize()
 		return res
+
+	
 def plot(sampling_freq, price_history, X, U, Y):
 	Vol = np.abs(X) + np.abs(U)
 
