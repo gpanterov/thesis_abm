@@ -126,32 +126,6 @@ def moments_likelihood(price_history, Inventory, p_own, params):
 		(MU_delta - MU_Dbar)**2 / (2 * Sigma_Dbar)  
 	return LN_F 
 
-def sim_likelihood(price_history, Inventory, p_own, params, num_sim=100, er=0.5):
-	""" Likelihood (sim) of observing a certain price *moments* """
-	P_LAST = np.array(price_history[:-1])
-	P = np.array(price_history[1:])
-	DELTA_P = P - P_LAST
-
-	N = len(DELTA_P) # number of observations (new prices)
-	num_trades = N / len(p_own)
-	assert N % len(p_own) == 0	
-
-	target = resample_series(P, sampling_freq = num_trades)
-	T = 1. * num_trades
-	indx_start_price = np.arange(0, len(price_history), num_trades)[:-1]
-	start_prices = np.array(price_history)[indx_start_price]
-	L = []
-	for i, p_start in enumerate(start_prices):
-		num_success = 0
-		for _ in range(num_sim):
-			informed_prices = [p_own[i]]
-			price_history_sim, Inv, X, U, Y = raw_data(informed_prices, 
-											p_start, num_trades, params)
-			sim_mean = np.mean(price_history_sim)
-			if (target[i] < sim_mean + er) and (target[i] > sim_mean - er):
-				num_success += 1
-		L.append(num_success*1. / num_sim)
-	return L
 
 class SimpleLikelihood(object):
 	def __init__(self, price_history, Inventory, lfunc, num_trades, params_class):

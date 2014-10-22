@@ -16,7 +16,7 @@ informed_prices = [37., 41., 38.] * 2
 price_history, Inv, X, U, Y = tools.raw_data(informed_prices, 
 										p_start, num_trades, params)
 
-lfunc = tools.sim_likelihood 
+lfunc = tools.moments_likelihood
 model = tools.SimpleLikelihood(price_history, Inv, 
 					lfunc, num_trades, params_class)
 res = model.optimize()
