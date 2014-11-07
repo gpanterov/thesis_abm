@@ -222,3 +222,20 @@ def plot(sampling_freq, price_history, X, U, Y):
 	plt.show()
 
 
+def func_vol(Sigma, price_history, Vol, informed_prices, price_durations,
+			params):
+	"""
+	This is the volume function. It should return (close to) zero if
+	the Sigma parameter is the true parameter. Used to estimate Sigma_u.
+	"""
+	V = np.mean(Vol)
+	T = len(Vol)
+	P_last = price_history[:-1]
+	P = tools.create_price_vector(informed_prices, price_durations, T)
+	numerator = np.sum(np.abs(P - P_last))
+	z = params.Lambda/params.y_bar
+	a = params.alpha
+	w = np.sqrt(2/np.pi)
+	denom = 2 * z + a*params.Sigma_0 + a*z**2*Sigma
+	res = Sigma**0.5 * w + (1./T) * (1./denom) * numerator - V
+	return res
