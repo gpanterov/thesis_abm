@@ -152,12 +152,12 @@ class SimpleLikelihood(object):
 		prior_Sigmau = 0
 
 		prior_Lambda = normal_log_density(x[0], 1., 0.3)
-		prior_prices = normal_log_density(np.mean(p_own), 78, 2)
+		prior_prices = normal_log_density(np.mean(p_own), 100, 12)
 		prior_prices2 = normal_log_density(np.std(p_own), 0., 0.2)
 		prior_phi = normal_log_density(x[1], 0., 0.001)
 
 		all_priors = prior_Lambda + prior_phi + prior_Sigmau + \
-					prior_prices + prior_prices2 	
+					prior_prices #+ prior_prices2 	
 		return -np.sum(res + all_priors ) 
 
 	def optimize(self):
