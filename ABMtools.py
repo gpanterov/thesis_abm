@@ -227,6 +227,13 @@ def func_vol(Sigma, price_history, Vol, informed_prices, price_durations,
 	"""
 	This is the volume function. It should return (close to) zero if
 	the Sigma parameter is the true parameter. Used to estimate Sigma_u.
+
+	Example:
+	--------
+	import scipy.optimize as opt
+	x = opt.fsolve(func_vol, 10., args=(price_history, Vol, 
+					informed_prices, price_durations,params))
+
 	"""
 	V = np.mean(Vol)
 	T = len(Vol)
