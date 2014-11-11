@@ -1,7 +1,23 @@
 import numpy as np
 import pandas as pd
 import scipy.stats as stats
+import ABMtools as abmtools
+from scipy.stats import norm
 
+
+def folded_pdf(x, mu, sigma):
+	"""
+	Returns the pdf of a folded normal random variable with mu, sigma
+
+	Reference: 
+	---------
+	http://en.wikipedia.org/wiki/Folded_normal_distribution
+	"""
+
+	z = 1. / (sigma * np.sqrt(2 * np.pi)) # helper term
+	pdf = z * np.exp(-(x - mu)**2 / (2 * sigma**2)) + \
+		z *  np.exp(-(-x - mu)**2 / (2 * sigma**2)) 
+	return pdf
 
 def normal_log_density(x, mu, sig):
 	return -np.log(sig) - 0.5 * np.log(2*np.pi) - (x - mu) **2 / (2*sig**2)
@@ -43,19 +59,7 @@ def likelihood2(pdelta, y, Lambda, alpha, Sigma_u, Sigma_e, Sigma_n,
 	ll= normal_log_density(pdelta, mu1, sig1) + normal_log_density(y, mu2, sig2)
 	return np.sum(ll)
 
-def folded_pdf(x, mu, sigma):
-	"""
-	Returns the pdf of a folded normal random variable with mu, sigma
 
-	Reference: 
-	---------
-	http://en.wikipedia.org/wiki/Folded_normal_distribution
-	"""
-
-	z = 1. / (sigma * np.sqrt(2 * np.pi)) # helper term
-	pdf = z * np.exp(-(x - mu)**2 / (2 * sigma**2)) + \
-		z *  np.exp(-(-x - mu)**2 / (2 * sigma**2)) 
-	return pdf
 
 def likelihood_pdelta(pdelta, Lambda, Sigma_u, alpha, Sigma_e, 
 				P_informed, P_last, Sigma_0, y_bar):
@@ -72,6 +76,53 @@ def likelihood_pdelta(pdelta, Lambda, Sigma_u, alpha, Sigma_e,
 	ll = normal_log_density(pdelta, mu, sig)
 	return np.sum(ll)
 
+def obj_func1(params, price_history, vol,
+					price_durations, Sigma_0, y_bar):
+
+	num_trades = len(price_history) - 1
+	P_last = price_history[:-1]
+	pdelta = np.array(price_history[1:]) - P_last
+
+	K = len(price_durations) + 1
+	informed_prices = params[-K:]	
+	P_informed = abmtools.create_price_vector(informed_prices,
+									 price_durations, num_trades)
+	x = params[:-K]
+
+	lfunc1 = lambda x: likelihood1(pdelta, vol,  
+		x[0], x[1], x[2], x[3], x[4], P_informed, P_last, Sigma_0, y_bar) \
+		+ np.log(norm.pdf(x[0], 0.5, 0.1)) \
+		+ np.log(norm.pdf(x[1], 5e-2, 1e-1)) \
+		+ np.log(norm.pdf(x[2], 100., 15.))  \
+		+ np.log(norm.pdf(x[3], 0.02**2, 0.01)) \
+		+ np.log(norm.pdf(x[4], 9, 3))
+
+
+	return -lfunc1(x)
+
+def sample1(params0, price_history, vol,
+					price_durations, Sigma_0, y_bar):
+
+	num_trades = len(price_history) - 1
+	P_last = price_history[:-1]
+	pdelta = np.array(price_history[1:]) - P_last
+
+	K = len(price_durations) + 1
+	informed_prices = params0[-K:]	
+	P_informed = abmtools.create_price_vector(informed_prices,
+									 price_durations, num_trades)
+	x = params0[:-K]
+
+	lfunc1 = lambda x: likelihood1(pdelta, vol,  
+		x[0], x[1], x[2], x[3], x[4], P_informed, P_last, Sigma_0, y_bar) \
+		+ np.log(norm.pdf(x[0], 0.3, 0.1)) \
+		+ np.log(norm.pdf(x[1], 5e-2, 1e-1)) \
+		+ np.log(norm.pdf(x[2], 80., 15.))  \
+		+ np.log(norm.pdf(x[3], 0.02**2, 0.01)) \
+		+ np.log(norm.pdf(x[4], 5, 5))
+
+
+	return lfunc1(x)
 
 def metropolis_hastings(x0, sigmas, lfunc, N=1000):
 	"""
