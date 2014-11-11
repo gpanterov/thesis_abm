@@ -6,6 +6,21 @@ import scipy.stats as stats
 def normal_log_density(x, mu, sig):
 	return -np.log(sig) - 0.5 * np.log(2*np.pi) - (x - mu) **2 / (2*sig**2)
 
+def likelihood2(pdelta, y, Lambda, alpha, Sigma_u, Sigma_e, Sigma_n,
+				P_informed, P_last, Sigma_0, y_bar):
+	
+	z = Lambda / y_bar
+	mu1 = z * y
+	sig1 = (z**2 * Sigma_n + Sigma_e) **0.5
+
+	xstar = (P_informed - P_last) / \
+		(2 * z + alpha * (Sigma_0 + z**2 * Sigma_u + Sigma_e))
+	mu2 = xstar
+	sig2 = (Sigma_u + Sigma_n)**0.5
+
+	ll= normal_log_density(pdelta, mu1, sig1) + normal_log_density(y, mu2, sig2)
+	return np.sum(ll)
+
 def folded_pdf(x, mu, sigma):
 	"""
 	Returns the pdf of a folded normal random variable with mu, sigma
@@ -20,34 +35,35 @@ def folded_pdf(x, mu, sigma):
 		z *  np.exp(-(-x - mu)**2 / (2 * sigma**2)) 
 	return pdf
 
-def likelihood_pdelta(pdelta, Lambda, Sigma_u, alpha, 
+def likelihood_pdelta(pdelta, Lambda, Sigma_u, alpha, Sigma_e, 
 				P_informed, P_last, Sigma_0, y_bar):
 	"""
 	Returns the log-likelihood of the price change (pdelta)
 	"""
 	z = Lambda / y_bar
 	xstar = (P_informed - P_last) / \
-		(2 * z + alpha * Sigma_0 + z**2 * Sigma_u)
+		(2 * z + alpha * (Sigma_0 + z**2 * Sigma_u + Sigma_e))
 	mu = z * xstar
-	sig = (z**2 * Sigma_u ) **0.5
+	sig = (z**2 * Sigma_u + Sigma_e) **0.5
 
 	pdf = stats.norm.pdf(pdelta, mu, sig)
 	ll = normal_log_density(pdelta, mu, sig)
 	return np.sum(ll)
 
 
-def metropolis_hastings(x0, lfunc, N=1000):
+def metropolis_hastings(x0, sigmas, lfunc, N=1000):
 	"""
 	Samples from a given distribution according to the
 	Metropolis Hastings algorithm
 
+	Parameters:
+	-----------
+
 	lfunc: likelihood function (lambda function that takes x0 as argument only)
-
 	x0: (Kx1) array of starting values
-
+	sigmas: list
+			standard deviations for the drawing function q
 	N: number of samples to return
-
-
 
 	Returns:
 	--------
@@ -73,19 +89,21 @@ def metropolis_hastings(x0, lfunc, N=1000):
 
 	# This function generates the new values
 	q = np.random.normal
-	sigmas = [0.01, 10., 1e-2]
 	# starting values
 
 	
 	for i in range(N):
-
 		for j in range(num_params):
 			old_likelihood = lfunc(Xcurrent)
 			Xtemp = Xcurrent[:]
 			# draw a new value
 			draw = q(Xcurrent[j], sigmas[j])
 			Xtemp[j] = draw
-			new_likelihood = lfunc(Xtemp)
+			try:
+				new_likelihood = lfunc(Xtemp)
+			except ValueError:
+				new_likelihood = -np.inf
+
 			a = new_likelihood - old_likelihood
 			if a >= 0:
 

@@ -17,8 +17,11 @@ class default_params(object):
 	I_bar = 10.
 
 	# Informed trader
-	Sigma_0 = 1.5 ** 2
+	Sigma_0 = 0
 	alpha = 5e-2 # risk aversion
+
+	Sigma_e = 0.02**2
+	Sigma_n = 3**2
 
 # Market maker price rule
 def mm_price_change(x_t, u_t, I, params):
@@ -29,7 +32,7 @@ def mm_price_change(x_t, u_t, I, params):
 # Informed trader optimal demand
 def compute_xstar(p_last, p_own, params):
 	""" Return optimal trade for informed trader """
-	Sigma_MM = (params.Lambda / params.y_bar)**2 * params.Sigma_u
+	Sigma_MM = (params.Lambda / params.y_bar)**2 * params.Sigma_u + params.Sigma_e
 	return (p_own - p_last) / ((2 * params.Lambda / params.y_bar) + \
 			params.alpha * (params.Sigma_0 + Sigma_MM))
 
@@ -70,7 +73,8 @@ def raw_data(informed_prices, price_durations, p_start, num_trades, params):
 		x_t = compute_xstar(p_last, p, params)
 		I_last = Inv[-1]
 		I_new = I_last - (x_t + u_t)
-		p_new = p_last + mm_price_change(x_t, u_t, I_last, params)
+		e = np.random.normal(0, params.Sigma_e**0.5)
+		p_new = p_last + mm_price_change(x_t, u_t, I_last, params) + e
 		price_history.append(p_new)
 		Inv.append(I_new)
 		X.append(x_t)
