@@ -91,9 +91,10 @@ def metropolis_hastings(x0, sigmas, lfunc, N=1000):
 	q = np.random.normal
 	# starting values
 
-	
+	old_likelihood = lfunc(Xcurrent)
 	for i in range(N):
 		for j in range(num_params):
+			#assert old_likelihood == lfunc(Xcurrent)
 			old_likelihood = lfunc(Xcurrent)
 			Xtemp = Xcurrent[:]
 			# draw a new value
@@ -106,14 +107,14 @@ def metropolis_hastings(x0, sigmas, lfunc, N=1000):
 
 			a = new_likelihood - old_likelihood
 			if a >= 0:
-
 				Xcurrent[j] = draw
-
+				old_likelihood = new_likelihood
 			else:
 				u = np.random.uniform()
 				prob = np.exp(a)
 				if prob > u:
 					Xcurrent[j] = draw
+					old_likelihood = new_likelihood
 				else:
 					pass
 		sample[i, :] = np.array(Xcurrent)	
