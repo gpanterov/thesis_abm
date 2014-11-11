@@ -6,6 +6,28 @@ import scipy.stats as stats
 def normal_log_density(x, mu, sig):
 	return -np.log(sig) - 0.5 * np.log(2*np.pi) - (x - mu) **2 / (2*sig**2)
 
+def likelihood1(pdelta, vol,  Lambda, alpha, Sigma_u, Sigma_e, Sigma_n,
+				P_informed, P_last, Sigma_0, y_bar):
+
+
+	z = Lambda / y_bar
+	xstar = (P_informed - P_last) / \
+		(2 * z + alpha * (Sigma_0 + z**2 * Sigma_u + Sigma_e))
+
+	mu1 = (1. / z) * pdelta - xstar
+	sig1 = (1. / z) * Sigma_e**0.5
+	l1 = stats.norm.pdf(vol - np.abs(xstar), mu1, sig1) + \
+			stats.norm.pdf(-vol + np.abs(xstar), mu1, sig1)
+
+	mu2 = z * xstar
+	sig2 = (z**2 * Sigma_u + Sigma_e)**0.5
+
+	ll2 = normal_log_density(pdelta, mu2, sig2)
+
+	ll= np.log(l1) + ll2
+	return np.sum(ll)
+
+
 def likelihood2(pdelta, y, Lambda, alpha, Sigma_u, Sigma_e, Sigma_n,
 				P_informed, P_last, Sigma_0, y_bar):
 	
@@ -94,15 +116,13 @@ def metropolis_hastings(x0, sigmas, lfunc, N=1000):
 	old_likelihood = lfunc(Xcurrent)
 	for i in range(N):
 		for j in range(num_params):
-			#assert old_likelihood == lfunc(Xcurrent)
-			old_likelihood = lfunc(Xcurrent)
 			Xtemp = Xcurrent[:]
 			# draw a new value
 			draw = q(Xcurrent[j], sigmas[j])
 			Xtemp[j] = draw
-			try:
+			if draw > 0: 
 				new_likelihood = lfunc(Xtemp)
-			except ValueError:
+			else: # negative values for the parameters have zero likelihood
 				new_likelihood = -np.inf
 
 			a = new_likelihood - old_likelihood
