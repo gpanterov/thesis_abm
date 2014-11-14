@@ -106,7 +106,7 @@ class TradingModel(object):
 		+ np.log(norm.pdf(Sigma_u, self.Sigmau_mu, self.Sigmau_sig)) \
 		+ np.log(norm.pdf(Sigma_e, self.Sigmae_mu, self.Sigmae_sig))
 
-		return ll + log_priors
+		return ll #+ log_priors
 
 	def get_price_durations(self):
 		self.price_durations =  [100, 80, 90]
