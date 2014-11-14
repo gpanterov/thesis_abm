@@ -3,7 +3,8 @@ import pandas as pd
 import scipy.stats as stats
 import ABMtools as abmtools
 from scipy.stats import norm
-
+import scipy.stats as stats
+import math
 
 def folded_pdf(x, mu, sigma):
 	"""
@@ -22,9 +23,17 @@ def folded_pdf(x, mu, sigma):
 def normal_log_density(x, mu, sig):
 	return -np.log(sig) - 0.5 * np.log(2*np.pi) - (x - mu) **2 / (2*sig**2)
 
-def likelihood1(pdelta, vol,  Lambda, alpha, Sigma_u, Sigma_e, Sigma_n,
-				P_informed, P_last, Sigma_0, y_bar):
+def normal_density(x, mu, sig):
 
+	return (1./(sig * (2 * np.pi)**0.5)) * np.exp(- (x - mu)**2 / (2.*sig**2))
+
+
+def likelihood1(pdelta, vol,  Lambda, alpha, Sigma_u, Sigma_e,
+				P_informed, P_last, Sigma_0, y_bar):
+	"""
+	Returns the log-likelihood for the join probability of price_change
+	and volume (non-signed)
+	"""
 
 	z = Lambda / y_bar
 	xstar = (P_informed - P_last) / \
@@ -46,7 +55,11 @@ def likelihood1(pdelta, vol,  Lambda, alpha, Sigma_u, Sigma_e, Sigma_n,
 
 def likelihood2(pdelta, y, Lambda, alpha, Sigma_u, Sigma_e, Sigma_n,
 				P_informed, P_last, Sigma_0, y_bar):
-	
+	"""
+	Returns the log-likelihood for the join probability of price_change
+	and signed volume 
+	"""
+
 	z = Lambda / y_bar
 	mu1 = z * y
 	sig1 = (z**2 * Sigma_n + Sigma_e) **0.5
@@ -61,24 +74,13 @@ def likelihood2(pdelta, y, Lambda, alpha, Sigma_u, Sigma_e, Sigma_n,
 
 
 
-def likelihood_pdelta(pdelta, Lambda, Sigma_u, alpha, Sigma_e, 
-				P_informed, P_last, Sigma_0, y_bar):
-	"""
-	Returns the log-likelihood of the price change (pdelta)
-	"""
-	z = Lambda / y_bar
-	xstar = (P_informed - P_last) / \
-		(2 * z + alpha * (Sigma_0 + z**2 * Sigma_u + Sigma_e))
-	mu = z * xstar
-	sig = (z**2 * Sigma_u + Sigma_e) **0.5
-
-	pdf = stats.norm.pdf(pdelta, mu, sig)
-	ll = normal_log_density(pdelta, mu, sig)
-	return np.sum(ll)
 
 def obj_func1(params, price_history, vol,
-					price_durations, Sigma_0, y_bar):
+					price_durations, y_bar):
 
+	"""
+	Objective function for optimization
+	"""
 	num_trades = len(price_history) - 1
 	P_last = price_history[:-1]
 	pdelta = np.array(price_history[1:]) - P_last
@@ -89,20 +91,24 @@ def obj_func1(params, price_history, vol,
 									 price_durations, num_trades)
 	x = params[:-K]
 
+	Sigma_0 = x[4]
 	lfunc1 = lambda x: likelihood1(pdelta, vol,  
-		x[0], x[1], x[2], x[3], x[4], P_informed, P_last, Sigma_0, y_bar) \
+		x[0], x[1], x[2], x[3], P_informed, P_last, Sigma_0, y_bar) \
 		+ np.log(norm.pdf(x[0], 0.5, 0.1)) \
 		+ np.log(norm.pdf(x[1], 5e-2, 1e-1)) \
 		+ np.log(norm.pdf(x[2], 100., 15.))  \
 		+ np.log(norm.pdf(x[3], 0.02**2, 0.01)) \
-		+ np.log(norm.pdf(x[4], 9, 3))
-
+		+ np.log(norm.pdf(x[4], 10, 5))
 
 	return -lfunc1(x)
 
-def sample1(params0, price_history, vol,
-					price_durations, Sigma_0, y_bar):
+def log_posterior_1(params0, price_history, vol,
+					price_durations, y_bar):
 
+	"""
+	Threshold function for metropolis hastings. It is the the log of posterior
+	distribution
+	"""
 	num_trades = len(price_history) - 1
 	P_last = price_history[:-1]
 	pdelta = np.array(price_history[1:]) - P_last
@@ -113,18 +119,23 @@ def sample1(params0, price_history, vol,
 									 price_durations, num_trades)
 	x = params0[:-K]
 
+	Sigma_0 = x[4]
 	lfunc1 = lambda x: likelihood1(pdelta, vol,  
-		x[0], x[1], x[2], x[3], x[4], P_informed, P_last, Sigma_0, y_bar) \
+		x[0], x[1], x[2], x[3], P_informed, P_last, Sigma_0, y_bar) \
 		+ np.log(norm.pdf(x[0], 0.3, 0.1)) \
 		+ np.log(norm.pdf(x[1], 5e-2, 1e-1)) \
 		+ np.log(norm.pdf(x[2], 80., 15.))  \
 		+ np.log(norm.pdf(x[3], 0.02**2, 0.01)) \
-		+ np.log(norm.pdf(x[4], 5, 5))
-
+		+ np.log(norm.pdf(x[4], 10, 5))
 
 	return lfunc1(x)
 
-def metropolis_hastings(x0, sigmas, lfunc, N=1000):
+
+
+
+
+
+def metropolis_hastings(x0, sigmas, lfunc, N=1000, types_cont=False):
 	"""
 	Samples from a given distribution according to the
 	Metropolis Hastings algorithm
@@ -156,27 +167,40 @@ def metropolis_hastings(x0, sigmas, lfunc, N=1000):
 	sample = btools.metropolis_hastings(x0, lfunc) 
 
 	"""
+
+	poisson_log_pmf = lambda mu, k: -mu + k * math.log(mu) - math.log(math.factorial(k))
+
 	num_params = len(x0)
 	sample = np.empty((N, num_params))
-	Xcurrent = x0[:]
+	Xcurrent = list(x0)
 
-	# This function generates the new values
-	q = np.random.normal
-	# starting values
+	if not types_cont:
+		types_cont = [True] * num_params
 
 	old_likelihood = lfunc(Xcurrent)
 	for i in range(N):
+		#print Xcurrent
 		for j in range(num_params):
 			Xtemp = Xcurrent[:]
 			# draw a new value
-			draw = q(Xcurrent[j], sigmas[j])
+			if types_cont[j]:
+				draw = np.random.normal(Xcurrent[j], sigmas[j])
+				c = 0
+			else:
+				#draw = stats.poisson.rvs(Xcurrent[j])
+				#c = poisson_log_pmf(Xcurrent[j], draw) - poisson_log_pmf(draw, Xcurrent[j])
+				draw = np.random.normal(Xcurrent[j], sigmas[j])
+				draw = min(draw, 0.99)
+				draw = max(draw, 0.01)
+				c = 0
 			Xtemp[j] = draw
 			if draw > 0: 
 				new_likelihood = lfunc(Xtemp)
 			else: # negative values for the parameters have zero likelihood
 				new_likelihood = -np.inf
 
-			a = new_likelihood - old_likelihood
+
+			a = new_likelihood - old_likelihood + c
 			if a >= 0:
 				Xcurrent[j] = draw
 				old_likelihood = new_likelihood
