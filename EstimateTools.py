@@ -34,6 +34,86 @@ def log_likelihood(Lambda, alpha, Sigma_0, Sigma_u, Sigma_e, P_informed,
 	ll= np.log(l1) + ll2
 	return np.sum(ll)
 
+def split_window(x, Lambda, alpha, Sigma_0, Sigma_u, Sigma_e,
+						P_last, pdelta, vol): 
+	x = list(x)
+	cutoff =  len(pdelta)/2
+	Pi = [x[0]] * cutoff + [x[1]] * cutoff
+	return log_likelihood(Lambda, alpha, Sigma_0, Sigma_u, Sigma_e, Pi, 
+					P_last, pdelta, vol)
+
+def single_window(x, Lambda, alpha, Sigma_0, Sigma_u, Sigma_e,
+						P_last, pdelta, vol): 
+	x = list(x)
+	Pi = x * len(pdelta)
+	return log_likelihood(Lambda, alpha, Sigma_0, Sigma_u, Sigma_e, Pi, 
+					P_last, pdelta, vol)
+
+
+def get_trading_signals(price_history, vol,  Lambda, alpha, 
+						Sigma_0, Sigma_u, Sigma_e, window_size=20):
+	"""
+	Produces a set of trading signals for a given price series by 
+	estimating discrete change in prices of informed trader
+	
+	Example:
+	--------
+	import EstimateTools as etools
+
+	window_size=16
+	Xsample, Xsample_sd = etools.get_trading_signals(price_history, vol,  Lambda, alpha, 
+						Sigma_0, Sigma_u, Sigma_e, window_size)
+
+	plt.figure(2)
+	plt.subplot(3,1,1)
+	plt.plot(price_history[window_size:])
+	plt.plot(Xsample[:,1])
+
+	plt.subplot(3,1,2)
+	plt.plot(Xsample_sd[:,1])
+
+	plt.subplot(3,1,3)
+	plt.plot(np.abs(Xsample[:,1] - Xsample[:,0]))
+	plt.show()
+
+
+	"""
+	pdelta = np.array(price_history[1:]) - np.array(price_history[:-1])
+	num_trades = len(price_history) - 1
+
+	
+	for i in range(0, num_trades - window_size):
+		if i%25 == 0:
+			print "Trading window is at position ", i
+		l = i
+		u = l + window_size
+		Pl = np.array(price_history[l:u])
+		pd = np.array(pdelta[l:u])
+		v = vol[l:u]
+
+		# Split window estimation
+		x0=[np.mean(Pl)]*2
+		sigmas=[1,1]
+		func = lambda x: split_window(x, Lambda, alpha, Sigma_0, Sigma_u, Sigma_e,
+						Pl, pd, v)
+
+# 		# Single window estimation 
+#		x0 = [np.mean(Pl)]
+#		sigmas = [1]
+#		func = lambda x: single_window(x, Lambda, alpha, Sigma_0, Sigma_u, Sigma_e,
+#						Pl, pd, v)
+
+
+		sample =btools.metropolis_hastings(x0, sigmas, func)
+		x_sample = np.mean(sample[50:, :], axis=0)
+		x_sample_sd = np.std(sample[50:, :], axis=0)
+		if i == 0:
+			Xsample = x_sample
+			Xsample_sd = x_sample_sd
+		else:
+			Xsample = np.row_stack((Xsample, x_sample))
+			Xsample_sd = np.row_stack((Xsample_sd, x_sample_sd))
+	return Xsample, Xsample_sd
 
 class TradingModel(object):
 
@@ -46,8 +126,12 @@ class TradingModel(object):
 	model = etools.TradingModel(price_history, vol)
 	model.MCMC()
 	model.MAP()
+
+	print model.map_estimate
+	print model.posterior_means
+
 	"""
-	def __init__(self, price_history, vol):
+	def __init__(self, price_history, vol, price_durations):
 
 		assert len(price_history) == len(vol) + 1
 
@@ -58,7 +142,7 @@ class TradingModel(object):
 		self.pdelta = np.array(price_history[1:]) - self.P_last
 		self.num_trades = len(self.pdelta)
 
-		self.get_price_durations()
+		self.get_price_durations(price_durations)
 		self.get_priors()
 
 		self.posterior_means = False
@@ -108,8 +192,8 @@ class TradingModel(object):
 
 		return ll #+ log_priors
 
-	def get_price_durations(self):
-		self.price_durations =  [100, 80, 90]
+	def get_price_durations(self, price_durations):
+		self.price_durations =  price_durations
 
 	def get_priors(self):
 		self.Lambda_mu = 0.025

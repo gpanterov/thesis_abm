@@ -13,7 +13,7 @@ class default_params(object):
 	# Market Maker
 	Lambda = 0.5  
 	phi = 0.
-	y_bar = 10.
+	y_bar = 1.
 	I_bar = 10.
 
 	# Informed trader
