@@ -155,7 +155,8 @@ class TradingModel(object):
 				[np.mean(self.price_history)] * (len(self.price_durations) + 1)
 		sigmas = [self.Lambda_sig, self.alpha_sig, self.Sigma0_sig, self.Sigmau_sig, self.Sigmae_sig] + \
 					[1] * (len(self.price_durations) + 1)
-
+		ll0 = self.log_posterior(x0)
+		print ll0
 		self.posterior_sample = btools.metropolis_hastings(x0, sigmas, self.log_posterior , N) 
 		self.posterior_means = np.mean(self.posterior_sample[50:, :], axis=0)
 
@@ -205,8 +206,8 @@ class TradingModel(object):
 		self.Sigma0_mu = 10
 		self.Sigma0_sig = 3
 
-		self.Sigmau_mu = 100
-		self.Sigmau_sig = 15
+		self.Sigmau_mu = 0.75 * np.var(self.vol) / (1 - 2/np.pi)  # Approximate how much noise trading
+		self.Sigmau_sig = 0.1 * np.var(self.vol) / (1 - 2/np.pi)
 
 		self.Sigmae_mu = 0.0004
 		self.Sigmae_sig = 0.001

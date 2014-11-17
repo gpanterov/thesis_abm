@@ -18,15 +18,24 @@ class params_class(abmtools.default_params):
 		pass
 
 params = params_class()
-params.Lambda = 0.025
-params.Sigma_0 = 10
-p_start = 37.
+#params.Lambda = 0.005
+#params.alpha = 0.002
+#params.Sigma_0 = 116
+#params.Sigma_u = 13.75
+#params.Sigma_e = 0.0009
+
+params.Sigma_0 = 15
+params.Lambda = 0.01
+params.alpha = 0.005
+#p_start = 98.
+#num_trades = 581
+#informed_prices = [98.9, 97.6, 98.1, 98.8, 98.5] 
+#price_durations = [120, 120, 120, 120]
+
+p_start = 40.
 num_trades = 300
-#informed_prices = [37.3, 41., 37., 35.2] 
-informed_prices = [40.1, 40. ,40.1, 39.9]
-price_durations = [100, 80, 90]
-
-
+informed_prices = [37.3, 41.2, 38.9, 37.]
+price_durations = [100,80,90]
 
 price_history, Inv, X, U, Y = abmtools.raw_data(informed_prices, price_durations,
 										p_start, num_trades, params)
@@ -52,11 +61,15 @@ vol = np.abs(X) + np.abs(U)
 
 
 d = num_trades / len(informed_prices)
-#d=95
+#price_durations_hat = [50] * 5
 #price_durations_hat = [d] * (len(informed_prices) - 1)
 price_durations_hat = price_durations
+
 model = etools.TradingModel(price_history, vol, price_durations_hat)
 print "Model is using price durations: ", model.price_durations
+model.Lambda_mu = Lambda
+model.alpha_mu = alpha
+model.Sigma0_mu = Sigma_0
 model.MCMC()
 model.MAP()
 print [round(i,2) for i in model.posterior_means]
@@ -67,10 +80,10 @@ print [round(i,2) for i in model.map_estimate]
 print "\n"
 print "Series stats"
 print "-------------"
-print "|X|: ", np.std(np.abs(X))
-print "|U|: ", np.std(np.abs(U))
-print "Volume: ", np.std(vol)
-print "Price change volatility: ", np.std(pdelta)
+print "VAR(|X|): ", np.var(np.abs(X))
+print "VAR(|U|): ", np.var(np.abs(U))
+print "VAR(Volume): ", np.var(vol)
+print "Price change variance: ", np.var(pdelta)
 print "-------------"
 print "\n"
 
