@@ -51,7 +51,7 @@ def single_window(x, Lambda, alpha, Sigma_0, Sigma_u, Sigma_e,
 
 
 def get_trading_signals(price_history, vol,  Lambda, alpha, 
-						Sigma_0, Sigma_u, Sigma_e, window_size=20):
+						Sigma_0, Sigma_u, Sigma_e, window_size=20, step_size=1):
 	"""
 	Produces a set of trading signals for a given price series by 
 	estimating discrete change in prices of informed trader
@@ -81,12 +81,13 @@ def get_trading_signals(price_history, vol,  Lambda, alpha,
 	pdelta = np.array(price_history[1:]) - np.array(price_history[:-1])
 	num_trades = len(price_history) - 1
 
-	
-	for i in range(0, num_trades - window_size):
+	price_index = []
+	for i in range(0, num_trades - window_size, step_size):
 		if i%25 == 0:
 			print "Trading window is at position ", i
 		l = i
 		u = l + window_size
+		price_index.append(u)
 		Pl = np.array(price_history[l:u])
 		pd = np.array(pdelta[l:u])
 		v = vol[l:u]
@@ -113,7 +114,7 @@ def get_trading_signals(price_history, vol,  Lambda, alpha,
 		else:
 			Xsample = np.row_stack((Xsample, x_sample))
 			Xsample_sd = np.row_stack((Xsample_sd, x_sample_sd))
-	return Xsample, Xsample_sd
+	return Xsample, Xsample_sd, price_index
 
 class TradingModel(object):
 
