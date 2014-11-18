@@ -169,6 +169,13 @@ class TradingModel(object):
 									options={'disp':True})
 		self.map_estimate = self.optimization_results.x
 
+		self.Lambda = self.map_estimate[0]
+		self.alpha = self.map_estimate[1]
+		self.Sigma_0 = self.map_estimate[2]
+		self.Sigma_u = self.map_estimate[3]
+		self.Sigma_e = self.map_estimate[4]
+		self.informed_prices = self.map_estimate[5:]
+
 	def log_posterior(self, params):
 		K = len(self.price_durations) + 1
 		x = params[:-K]
