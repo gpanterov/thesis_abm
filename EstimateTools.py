@@ -146,7 +146,7 @@ class TradingModel(object):
 		self.get_price_durations(price_durations)
 		self.get_priors()
 
-		self.posterior_means = False
+		self.posterior_means = None
 
 	def MCMC(self, N=1000):
 		"""
@@ -164,7 +164,15 @@ class TradingModel(object):
 	def MAP(self):
 		""" Maximum a posteriori estimation """
 		obj_func = lambda x: - self.log_posterior(x)
-		x0 = self.posterior_means
+		if self.posterior_means is not None:
+			print "Using the MCMC results as starting values for optimization"
+			x0 = self.posterior_means
+		else:
+			x0 = [self.Lambda_mu, self.alpha_mu, self.Sigma0_mu, self.Sigmau_mu, self.Sigmae_mu] + \
+				[np.mean(self.price_history)] * (len(self.price_durations) + 1)
+			print "Using the prior means as starting values for optimization"
+
+
 		self.optimization_results = minimize(obj_func, x0, method='nelder-mead', 
 									options={'disp':True})
 		self.map_estimate = self.optimization_results.x
